@@ -1,0 +1,47 @@
+permeation_analysis/
+├── src/
+│   ├── data/
+│   │   ├── single_pressure/
+│   │   │   └── example_data.xlsx    # For constant & variable D models
+│   │   └── multi_pressure/
+│   │       └── example_data.xlsx    # For multi-step analysis
+│   ├── models/
+│   │   ├── __init__.py	#done
+│   │   ├── base_model.py	#done
+│   │   ├── parameters.py	#done
+│   │   ├── single_pressure/
+│   │   │   ├── __init__.py	#done
+│   │   │   ├── constant_diffusivity/
+│   │   │   │   ├── __init__.py	#done
+│   │   │   │   ├── model.py	#done
+│   │   │   │   ├── plotting.py	#done
+│   │   │   │   └── workflow.py	#done
+│   │   │   └── variable_concentration/
+│   │   │       ├── __init__.py
+│   │   │       ├── model.py
+│   │   │       ├── plotting.py
+│   │   │       └── workflow.py
+│   │   └── multi_pressure/
+│   │       ├── __init__.py
+│   │       ├── model.py
+│   │       ├── plotting.py
+│   │       └── workflow.py
+│   ├── utils/
+│   │   ├── __init__.py #done
+│   │   ├── data_processing.py  #done
+│   │   ├── plotting.py # removed
+│   │   ├── time_analysis.py    # done
+│   │   └── units.py    # done
+│   └── main.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_parameters.py
+│   ├── test_units.py
+│   ├── test_timelag.py
+│   └── test_variable_concentration.py
+├── examples/
+│   ├── timelag_analysis.py
+│   └── variable_concentration.py
+├── README.md
+├── requirements.txt
+└── setup.py
