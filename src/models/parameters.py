@@ -3,21 +3,12 @@ from typing import Optional
 
 @dataclass
 class BaseParameters:
-    """
-    Required experimental parameters
-    
-    Units:
-    - thickness / cm
-    - diameter / cm
-    - flow_rate / cm³(STP) s⁻¹
-    - pressure / bar
-    - temperature / °C
-    """
-    thickness: float
-    diameter: float
-    flow_rate: float
-    pressure: float
-    temperature: float = 25.0
+    """Base parameters for all permeation models"""
+    thickness: float  # [cm]
+    diameter: float   # [cm]
+    flowrate: float  # [cm³(STP) s⁻¹]
+    pressure: float  # [bar]
+    temperature: float  # [°C]
 
     def validate(self) -> None:
         """Validate parameter values"""
@@ -25,7 +16,7 @@ class BaseParameters:
             raise ValueError("Thickness must be positive")
         if self.diameter <= 0:
             raise ValueError("Diameter must be positive")
-        if self.flow_rate <= 0:
+        if self.flowrate <= 0:
             raise ValueError("Flow rate must be positive")
         if self.pressure <= 0:
             raise ValueError("Pressure must be positive")
@@ -35,19 +26,19 @@ class BaseParameters:
 @dataclass
 class ModelParameters:
     """
-    Complete model parameters including fitted values
+    Complete model parameters, including base and model parameters (fitted to data or manually specified).
     
     Units:
     - diffusivity / cm² s⁻¹
     - permeability / cm³(STP) cm⁻¹ s⁻¹ bar⁻¹
     - solubility_coefficient / cm³(STP) cm⁻³ bar⁻¹
-    - solubility / cm³(STP) cm⁻³
+    - equilibrium_concentration / cm³(STP) cm⁻³
     """
     base: BaseParameters
     diffusivity: Optional[float] = None
     permeability: Optional[float] = None
     solubility_coefficient: Optional[float] = None
-    solubility: Optional[float] = None
+    equilibrium_concentration: Optional[float] = None
 
     def validate(self) -> None:
         """Validate all parameters"""
@@ -56,5 +47,5 @@ class ModelParameters:
             raise ValueError("Diffusivity must be positive")
         if self.permeability is not None and self.permeability <= 0:
             raise ValueError("Permeability must be positive")
-        if self.solubility is not None and self.solubility <= 0:
+        if self.equilibrium_concentration is not None and self.equilibrium_concentration <= 0:
             raise ValueError("Solubility must be positive")

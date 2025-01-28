@@ -17,7 +17,7 @@ class PermeationModel(ABC):
     - Diffusion coefficient / cm² s⁻¹
     - Permeability / cm³(STP) cm⁻¹ s⁻¹ bar⁻¹
     - Solubility Coefficient / cm³(STP) cm⁻³ bar⁻¹
-    - Solubility / cm³(STP) cm⁻³
+    - Equilibrium Concentration / cm³(STP) cm⁻³
     """
     
     def __init__(self, params: ModelParameters):
@@ -40,8 +40,8 @@ class PermeationModel(ABC):
     def from_data(cls, data: pd.DataFrame, base_params: BaseParameters) -> 'PermeationModel':
         """Create model instance and fit to experimental data"""
         model = cls(ModelParameters(base=base_params))
-        model.fit_to_data(data)
-        return model
+        processed_data = model.fit_to_data(data)
+        return model, processed_data
     
     @abstractmethod
     def fit_to_data(self, data: pd.DataFrame) -> None:
@@ -59,7 +59,7 @@ class PermeationModel(ABC):
         pass
     
     @abstractmethod
-    def calculate_solubility(self) -> float:
+    def calculate_equilibrium_concentration(self) -> float:
         """Calculate solubility coefficient [cm³(STP) cm⁻³ bar⁻¹]"""
         pass
     

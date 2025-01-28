@@ -16,9 +16,9 @@ def time_lag_analysis_workflow(
     file_path: str,
     thickness: float,
     diameter: float,
-    flow_rate: float,
+    flowrate: float,
     pressure: float,
-    temperature: float = 25.0,
+    temperature: float,
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -60,26 +60,26 @@ def time_lag_analysis_workflow(
     data = pd.read_excel(file_path)
     
     # Preprocess data
-    data = preprocess_data(data, thickness=thickness, diameter=diameter, flow_rate=flow_rate)
+    # data = preprocess_data(data, thickness=thickness, diameter=diameter, flowrate=flowrate, temp_celsius=temperature)
     
     # Create base parameters
     base_params = BaseParameters(
         thickness=thickness,
         diameter=diameter,
-        flow_rate=flow_rate,
+        flowrate=flowrate,
         pressure=pressure,
         temperature=temperature
     )
     
-    # Create and fit model
-    model = TimelagModel.from_data(data, base_params)
+    # Create and fit model, and return processed data
+    model, processed_data = TimelagModel.from_data(data, base_params)
     
     # Generate results dictionary
     results_dict = {
         'parameters': {
             'thickness': thickness,
             'diameter': diameter,
-            'flow_rate': flow_rate,
+            'flow_rate': flowrate,
             'pressure': pressure,
             'temperature': temperature
         },
@@ -92,7 +92,7 @@ def time_lag_analysis_workflow(
             'temperature': '°C',
             'diffusivity': 'cm² s⁻¹',
             'permeability': 'cm³(STP) cm⁻¹ s⁻¹ bar⁻¹',
-            'solubility': 'cm³(STP) cm⁻³ bar⁻¹'
+            'equilibrium_concentration': 'cm³(STP) cm⁻³ bar⁻¹'
         }
     }
     
@@ -104,17 +104,17 @@ def time_lag_analysis_workflow(
         plot_path = lambda name: None
 
     plot_timelag_analysis(
-        model, data,
+        model, processed_data,
         save_path=plot_path('timelag_analysis'),
         display=output_settings.get('display_plots', True)
     )
     
-    if model.params.diffusivity and model.params.solubility:
+    if model.params.diffusivity and model.params.equilibrium_concentration:
         conc_profile, flux_data = model.solve_pde(
             D=model.params.diffusivity,
-            C_eq=model.params.solubility,
+            C_eq=model.params.equilibrium_concentration,
             L=model.params.base.thickness,
-            T=max(data['time']),
+            T=max(processed_data['time']),
             dt=1.0,
             dx=0.01
         )
@@ -127,7 +127,7 @@ def time_lag_analysis_workflow(
         
         plot_flux_over_time(
             flux_data,
-            experimental_data=data,
+            experimental_data=processed_data,
             save_path=plot_path('flux_evolution'),
             display=output_settings.get('display_plots', True)
         )
@@ -135,7 +135,7 @@ def time_lag_analysis_workflow(
     # Handle data saving
     if output_dir and output_settings.get('save_data'):
         if data_format == 'csv':
-            data.to_csv(os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'), 
+            processed_data.to_csv(os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'), 
                        index=False)
             pd.DataFrame(results_dict['results']).to_csv(
                 os.path.join(output_dir, 'data', f'processed_data_{timestamp}.csv')

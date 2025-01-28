@@ -122,10 +122,10 @@ def preprocess_data(
     data: pd.DataFrame,
     thickness: float,
     diameter: float,
-    flow_rate: Optional[float] = None,
+    temp_celsius: float,
+    flowrate: Optional[float] = None,
     time_col: str = 'time',
     pressure_col: str = 'pressure',
-    temp_celsius: float = 25.0
 ) -> pd.DataFrame:
     """
     Preprocess raw experimental data.
@@ -138,14 +138,14 @@ def preprocess_data(
         Membrane thickness [cm]
     diameter : float
         Membrane diameter [cm]
-    flow_rate : float, optional
+    flowrate : float, optional
         Carrier gas flow rate [cm³/s]
+    temp_celsius : float
+        Temperature [°C]
     time_col : str
         Name of time column
     pressure_col : str
         Name of pressure column
-    temp_celsius : float
-        Temperature [°C]
     
     Returns
     -------
@@ -159,8 +159,8 @@ def preprocess_data(
     area = np.pi * (diameter/2)**2  # cm²
     
     # Calculate flux if flow rate is provided
-    if flow_rate is not None:
-        df['flux'] = calculate_flux(df, flow_rate, area)
+    if flowrate is not None:
+        df['flux'] = calculate_flux(df, flowrate, area)
         
         # Calculate cumulative flux
         df['cumulative flux'] = calculate_cumulative_flux(df)
