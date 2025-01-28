@@ -1,7 +1,6 @@
-from typing import Dict, Any, Tuple, Optional
+from typing import Tuple, Optional
 import numpy as np
 import pandas as pd
-from scipy.stats import linregress
 
 from ...base_model import PermeationModel
 from ...parameters import BaseParameters, ModelParameters, TransportParams
@@ -11,13 +10,6 @@ from ....utils.data_processing import preprocess_data
 class TimelagModel(PermeationModel):
     """
     Time-lag analysis model for constant diffusivity permeation.
-    
-    Methods:
-    --------
-    fit_to_data: Fit model to experimental data
-    calculate_diffusivity: Calculate diffusion coefficient
-    calculate_permeability: Calculate permeability
-    calculate_solubility: Calculate solubility coefficient
     """
     def __init__(self, params: ModelParameters):
         """
