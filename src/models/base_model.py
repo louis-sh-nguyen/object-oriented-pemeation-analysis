@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional
-from .parameters import BaseParameters, ModelParameters
+from typing import Dict, Any, Optional, Tuple
+from .parameters import BaseParameters, ModelParameters, TransportParams
 
 class PermeationModel(ABC):
     """
@@ -29,15 +29,19 @@ class PermeationModel(ABC):
     
     def _validate_parameters(self) -> None:
         """Validate model parameters"""
-        self.params.base.validate()
+        self.params.validate()
     
     @classmethod
-    def from_parameters(cls, base_params: BaseParameters, **model_params) -> 'PermeationModel':
+    def from_parameter_objects(cls, base_params: BaseParameters, 
+                       transport_params: Optional[TransportParams] = None) -> 'PermeationModel':
         """Create model instance from parameters"""
-        return cls(ModelParameters(base=base_params, **model_params))
+        return cls(ModelParameters(
+            base=base_params,
+            transport=transport_params or TransportParams()
+        ))
     
     @classmethod
-    def from_data(cls, data: pd.DataFrame, base_params: BaseParameters) -> 'PermeationModel':
+    def from_data(cls, data: pd.DataFrame, base_params: BaseParameters) -> Tuple['PermeationModel', pd.DataFrame]:
         """Create model instance and fit to experimental data"""
         model = cls(ModelParameters(base=base_params))
         processed_data = model.fit_to_data(data)

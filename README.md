@@ -93,6 +93,58 @@ output/
 - Permeability: cm³(STP) cm⁻¹ s⁻¹ bar⁻¹
 - Solubility: cm³(STP) cm⁻³ bar⁻¹
 
+## Parameter Structure and Model Workflow
+
+### Parameter Hierarchy
+```
+parameters/
+├── base_params/
+│   ├── thickness
+│   ├── diameter
+│   ├── flowrate
+│   ├── pressure
+│   └── temperature
+├── transport_params/
+│   ├── diffusivity
+│   ├── permeability
+│   └── solubility
+└── model_params/
+    ├── base_params
+    ├── transport_params
+```
+### Data Classes Hierarchy
+1. BaseParameters
+   - Stores experimental conditions (thickness, diameter, flowrate, pressure, temperature)
+   - Basic validation for physical parameters
+   - Used independently for data processing
+
+2. TransportParams
+   - Contains transport properties (diffusivity, permeability, solubility)
+   - Optional parameters that can be fitted or specified manually
+   - Independent validation for transport parameters
+
+3. ModelParameters
+   - Combines BaseParameters and TransportParams
+   - Complete parameter set for model initialization
+   - Cascading validation of all parameters
+
+### Relationship Flow
+
+## Usage Pattern
+1. Parameters (Dataclass)
+   - Data storage
+   - Validation
+   - Type safety
+
+2. Model Creation (Classmethod)
+   - from_parameters()
+   - from_data()
+
+3. Model Interface (Abstract)
+   - fit_to_data()
+   - calculate_diffusivity()
+   - calculate_permeability()
+
 ## License
 
 [Add license information]

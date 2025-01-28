@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Dict, Any, Optional
 from datetime import datetime
 from ....utils.data_processing import preprocess_data
-from ...parameters import BaseParameters
+from ...parameters import BaseParameters, ModelParameters, TransportParams
 from .model import TimelagModel
 from .plotting import (
     plot_timelag_analysis,
@@ -109,10 +109,10 @@ def time_lag_analysis_workflow(
         display=output_settings.get('display_plots', True)
     )
     
-    if model.params.diffusivity and model.params.equilibrium_concentration:
+    if model.params.transport.diffusivity and model.params.transport.equilibrium_concentration:
         conc_profile, flux_data = model.solve_pde(
-            D=model.params.diffusivity,
-            C_eq=model.params.equilibrium_concentration,
+            D=model.params.transport.diffusivity,
+            C_eq=model.params.transport.equilibrium_concentration,
             L=model.params.base.thickness,
             T=max(processed_data['time']),
             dt=1.0,

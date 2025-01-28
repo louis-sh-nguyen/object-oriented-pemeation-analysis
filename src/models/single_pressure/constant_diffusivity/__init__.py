@@ -20,6 +20,7 @@ Units:
 - Solubility / cm³(STP) cm⁻³
 """
 
+from ....models.parameters import BaseParameters, ModelParameters, TransportParams
 from .model import TimelagModel
 from .plotting import plot_timelag_analysis
 from .workflow import time_lag_analysis_workflow
@@ -27,6 +28,9 @@ from .workflow import time_lag_analysis_workflow
 __version__ = '0.1.0'
 
 __all__ = [
+    'BaseParameters',
+    'ModelParameters',
+    'TransportParams',
     'TimelagModel',
     'plot_timelag_analysis',
     'time_lag_analysis_workflow'

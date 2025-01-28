@@ -20,7 +20,7 @@ Units:
 - Solubility / cm³(STP) cm⁻³
 """
 
-from .parameters import BaseParameters, ModelParameters
+from .parameters import BaseParameters, ModelParameters, TransportParams
 from .base_model import PermeationModel
 from .single_pressure.constant_diffusivity.model import TimelagModel
 # from .single_pressure.variable_concentration.model import VariableConcentrationModel
@@ -31,6 +31,7 @@ __version__ = '0.1.0'
 __all__ = [
     'BaseParameters',
     'ModelParameters',
+    'TransportParams',
     'PermeationModel',
     'TimelagModel',
     'VariableConcentrationModel',
