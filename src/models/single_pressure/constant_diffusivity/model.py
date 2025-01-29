@@ -85,11 +85,32 @@ class TimelagModel(PermeationModel):
         stab_time = self.results.get('stabilisation_time') or find_stabilisation_time(data)
         steady_state = data[data['time'] >= stab_time]
         
-        slope = np.polyfit(steady_state['time'], steady_state['cumulative_flux'], 1)[0]
+        # Calculate regression for steady state region
+        slope, intercept, r_value, p_value, std_err = linregress(
+            steady_state['time'], 
+            steady_state['cumulative_flux']
+        )
+        
         P = slope * self.params.transport.thickness / self.params.base.pressure
         
-        self.results['permeability'] = P
+        # Store regression results
+        self.results.update({
+            'permeability': P,
+            'steady_state_slope': slope,
+            'steady_state_intercept': intercept,
+            'steady_state_r_squared': r_value**2,
+            'steady_state_std_err': std_err
+        })
+        
         return P
+
+    def get_steady_state_line(self, times: np.ndarray) -> np.ndarray:
+        """Get steady state line for plotting"""
+        if 'steady_state_slope' not in self.results or 'steady_state_intercept' not in self.results:
+            raise ValueError("Calculate permeability first to get steady state line")
+            
+        return (self.results['steady_state_slope'] * times + 
+                self.results['steady_state_intercept'])
 
     def calculate_solubility_coefficient(self) -> float:
         """Calculate solubility coefficient [cm³(STP) cm⁻³ bar⁻¹]"""

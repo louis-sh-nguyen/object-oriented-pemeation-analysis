@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 import numpy as np
 import pandas as pd
 
@@ -6,78 +6,43 @@ from ...base_model import PermeationModel
 from ...base_parameters import BaseParameters, ModelParameters, TransportParams
 from ....utils.time_analysis import find_stabilisation_time, find_time_lag
 from ....utils.data_processing import preprocess_data
+from .parameters import FVTModelParameters, FVTTransportParams
 
 class FVTModel(PermeationModel):
-    """
-    Variable diffusivity model based on Free Volume Theory (FVT).
+    """Variable diffusivity model based on Free Volume Theory (FVT)."""
     
-    Methods:
-    --------
-    fit_to_data: Fit model to experimental data
-    calculate_diffusivity: Calculate diffusion coefficient
-    calculate_permeability: Calculate permeability
-    calculate_solubility: Calculate solubility coefficient
-    """
-    def __init__(self, params: ModelParameters):
-        """
-        Initialise FVTModel.
-
-        Parameters
-        ----------
-
-        params : ModelParameters
-            Model parameters containing base parameters and optional diffusivity and equilibrium concentration
-        """
+    def __init__(self, params: FVTModelParameters):
         super().__init__(params)
-        self.results = {}
+        self.area = np.pi * (params.transport.diameter/2)**2  # [cm²]
+        self.results: Dict[str, Any] = {}
     
     @classmethod
     def from_parameters(cls,
-                    thickness: float,
-                    diameter: float,
-                    flowrate: float,
-                    pressure: float,
-                    temperature: float = 25.0,
-                    D1_prime: Optional[float] = None,
-                    D2_prime: Optional[float] = None,
-                    D0_T: Optional[float] = None,) -> 'FVTModel':
-        """
-        Create model instance from parameters
-        
-        Parameters
-        ----------
-        thickness : float
-            Membrane thickness [cm]
-        diameter : float
-            Membrane diameter [cm]
-        flowrate : float
-            Flow rate [cm³(STP) s⁻¹]
-        pressure : float
-            Pressure [bar]
-        temperature : float
-            Temperature [°C]
-        D1_prime : float, optional
-            Base diffusivity [cm² s⁻¹]
-        D2_prime : float, optional
-            Concentration-dependent diffusivity [cm² s⁻¹ cm³(STP)/cm³]
-        """
+                       pressure: float,
+                       temperature: float,
+                       thickness: float,
+                       diameter: float,
+                       D1_prime: Optional[float] = None,
+                       D2_prime: Optional[float] = None,
+                       D0_T: Optional[float] = None) -> 'FVTModel':
+        """Create model instance from parameters"""
         base_params = BaseParameters(
-            thickness=thickness,
-            diameter=diameter,
-            flowrate=flowrate,
             pressure=pressure,
             temperature=temperature
         )
         
-        transport_params = TransportParams(
+        transport_params = FVTTransportParams(
+            thickness=thickness,
+            diameter=diameter,
             D1_prime=D1_prime,
             D2_prime=D2_prime,
-            D0_T = D0_T
+            D0_T=D0_T
         )
         
-        return cls(ModelParameters(base=base_params, transport=transport_params))
-    
-    def solve_pde(self, D1_prime: float, D2_prime: float, D0_T: float, L: float, T: float, dt: float, dx: float) -> Tuple[np.ndarray, pd.DataFrame]:
+        return cls(FVTModelParameters(base=base_params, transport=transport_params))
+
+    def solve_pde(self, D1_prime: float, D2_prime: float, D0_T: float, 
+                  T: float, dt: float, dx: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Solve concentration profile using finite volume method.
         
@@ -98,11 +63,11 @@ class FVTModel(PermeationModel):
         
         Returns
         -------
-        np.ndarray
-            Concentration profile
-        pd.DataFrame
-            Flux data
+        Tuple[pd.DataFrame, pd.DataFrame]
+            Concentration profile and flux data
         """
+        L = self.params.transport.thickness
+        
         # Define spatial and temporal grids
         x = np.arange(0, L+dx, dx)
         t = np.arange(0, T+dt, dt)

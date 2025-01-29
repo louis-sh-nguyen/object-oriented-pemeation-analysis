@@ -1,15 +1,61 @@
 import os
 import pandas as pd
-from src.models.single_pressure.variable_diffusivity_fvt import FVTModel
+from src.models.base_parameters import BaseParameters
+from src.models.single_pressure.variable_diffusivity_fvt import (
+    FVTModel,
+    FVTModelParameters,
+    FVTTransportParams
+)
 
-def test_model_manually():
-    # Create model instance with manual parameters
+def test_model_creation():
+    """Test different ways to create FVTModel"""
+    
+    # Method 1: Simple parameter initialization
+    model1 = FVTModel.from_parameters(
+        pressure=50.0,          # Required base parameter
+        temperature=25.0,       # Required base parameter
+        thickness=0.1,          # Required transport parameter
+        diameter=1.0,           # Required transport parameter
+        D1_prime=2.38,         # Optional FVT parameter
+        D2_prime=1.00,         # Optional FVT parameter
+        D0_T=2.87e-7           # Optional FVT parameter
+    )
+    
+    # Method 2: Explicit parameter objects
+    base_params = BaseParameters(
+        pressure=50.0,
+        temperature=25.0
+    )
+    
+    transport_params = FVTTransportParams(
+        thickness=0.1,
+        diameter=1.0,
+        D1_prime=2.38,
+        D2_prime=1.00,
+        D0_T=2.87e-7
+    )
+    
+    model2 = FVTModel(FVTModelParameters(
+        base=base_params,
+        transport=transport_params
+    ))
+    
+    # Print parameters to verify
+    print("\nModel 1 Parameters:")
+    print(f"Base Parameters: {model1.params.base.__dict__}")
+    print(f"Transport Parameters: {model1.params.transport.__dict__}")
+    
+    print("\nModel 2 Parameters:")
+    print(f"Base Parameters: {model2.params.base.__dict__}")
+    print(f"Transport Parameters: {model2.params.transport.__dict__}")
+
+def test_pde_solving():
+    """Test PDE solving with FVT model"""
     model = FVTModel.from_parameters(
-        thickness=0.1,          # [cm]
-        diameter=1.0,           # [cm]
-        flowrate=8.0,         # [cm³(STP) s⁻¹]
-        pressure=50.0,          # [bar]
-        temperature=25.0,       # [°C]
+        pressure=50.0,
+        temperature=25.0,
+        thickness=0.1,
+        diameter=1.0,
         D1_prime=2.38,
         D2_prime=1.00,
         D0_T=2.87e-7
@@ -24,11 +70,17 @@ def test_model_manually():
         D1_prime=model.params.transport.D1_prime,
         D2_prime=model.params.transport.D2_prime,
         D0_T=model.params.transport.D0_T,
-        L=model.params.base.thickness,
         T=T,
         dt=dt,
         dx=dx
     )
+    
+    print("\nPDE Solution Results:")
+    print(f"Time points: {len(flux_df)}")
+    print(f"Spatial points: {len(Dprime_df.columns)}")
+    print(f"Max flux: {flux_df['flux'].max():.4e}")
+    print(f"Min flux: {flux_df['flux'].min():.4e}")
 
 if __name__ == '__main__':
-    test_model_manually()
+    test_model_creation()
+    # test_pde_solving()
