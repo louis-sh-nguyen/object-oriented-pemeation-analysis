@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from ...base_model import PermeationModel
-from ...base_parameters import BaseParameters, ModelParameters, TransportParams
+from ...base_parameters import BaseParameters, ModelParameters
 from ....utils.time_analysis import find_stabilisation_time, find_time_lag
 from ....utils.data_processing import preprocess_data
 from .parameters import FVTModelParameters, FVTTransportParams
@@ -40,9 +40,12 @@ class FVTModel(PermeationModel):
         )
         
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
-
+    
+    def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        pass
+    
     def solve_pde(self, D1_prime: float, D2_prime: float, D0_T: float, 
-                  T: float, dt: float, dx: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                  T: float, X:float, L:float, dt: float, dx: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Solve concentration profile using finite volume method.
         
@@ -66,17 +69,15 @@ class FVTModel(PermeationModel):
         Tuple[pd.DataFrame, pd.DataFrame]
             Concentration profile and flux data
         """
-        L = self.params.transport.thickness
-        
         # Define spatial and temporal grids
-        x = np.arange(0, L+dx, dx)
+        x = np.arange(0, X+dx, dx)
         t = np.arange(0, T+dt, dt)
         
         # Initialize D' profile
         D_prime = np.zeros((len(t), len(x)))  # (time, space)
         
         # Set initial condition
-        D_prime[0, :] = 0.0     # t=0
+        D_prime[0, :] = 1.0     # t=0
         
         # Set boundary conditions
         D_prime[:, 0] = D1_prime     # x=0
@@ -86,11 +87,11 @@ class FVTModel(PermeationModel):
         for n in range(1, len(t)):  # skip t=0
             for i in range(1, len(x)-1):    # skip x=0 and x=L
                 d2Dprime_dx2 = (D_prime[n-1, i+1] - 2*D_prime[n-1, i] + D_prime[n-1, i-1]) / dx**2
-                D_prime[n, i] = D_prime[n-1, i] + dt * (D0_T / L**2 * D_prime[n, i] * d2Dprime_dx2)
+                D_prime[n, i] = D_prime[n-1, i] + dt * (D0_T / L**2 * D_prime[n-1, i] * d2Dprime_dx2)
         
         # Boundary conditions
-        D_prime[:, 0] = 1.0
-        D_prime[:, -1] = 0.0
+        # D_prime[:, 0] = 1.0
+        # D_prime[:, -1] = 0.0
         
         # Calculate flux
         # F_prime = np.zeros(len(t))

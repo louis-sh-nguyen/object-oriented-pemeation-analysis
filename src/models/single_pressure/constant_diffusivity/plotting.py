@@ -59,9 +59,11 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     ax.grid(True, alpha=0.3)
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)
@@ -106,9 +108,11 @@ def plot_concentration_profile(conc_profile: pd.DataFrame,
     ax.set_title('Concentration Profile Evolution')
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)
@@ -157,9 +161,11 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
     ax.grid(True, alpha=0.3)
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)

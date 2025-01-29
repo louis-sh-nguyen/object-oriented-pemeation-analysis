@@ -185,7 +185,7 @@ class TimelagModel(PermeationModel):
             
             # Space stepping
             for i in range(1, Nx-1):
-                C_new[i] = C[i] + D * dt / dx**2 * (C[i+1] - 2*C[i] + C[i-1])
+                C_new[i] = C[i] + D * dt * (C[i+1] - 2*C[i] + C[i-1]) / dx**2 
             
             # Boundary conditions
             C_new[0] = C_eq
