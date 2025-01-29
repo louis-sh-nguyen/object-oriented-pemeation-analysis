@@ -1,7 +1,7 @@
 import os
 import json
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 from .model import TimelagModel
@@ -15,9 +15,9 @@ def time_lag_analysis_workflow(
     file_path: str,
     thickness: float,
     diameter: float,
-    flowrate: float,
     pressure: float,
     temperature: float,
+    flowrate: Optional[float] = None,
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -29,7 +29,7 @@ def time_lag_analysis_workflow(
 ) -> Dict[str, Any]:
     """Execute time-lag analysis workflow"""
     
-    # Create output directories if needed
+    # Setup output directories
     output_dir = output_settings.get('output_dir')
     if output_dir and (output_settings.get('save_plots') or output_settings.get('save_data')):
         os.makedirs(output_dir, exist_ok=True)
@@ -37,42 +37,46 @@ def time_lag_analysis_workflow(
     else:
         timestamp = None
 
-    # Load and process data
+    # Load data
     data = pd.read_excel(file_path)
     
     # Create model and fit
     model = TimelagModel.from_parameters(
+        pressure=pressure,
+        temperature=temperature,
         thickness=thickness,
         diameter=diameter,
-        flowrate=flowrate,
-        pressure=pressure,
-        temperature=temperature
+        flowrate=flowrate
     )
     processed_data = model.fit_to_data(data)
     
     # Generate results dictionary
     results_dict = {
         'parameters': {
-            'thickness': thickness,
-            'diameter': diameter,
-            'flow_rate': flowrate,
-            'pressure': pressure,
-            'temperature': temperature
+            'base': {
+                'pressure': pressure,
+                'temperature': temperature
+            },
+            'transport': {
+                'thickness': thickness,
+                'diameter': diameter,
+                'flowrate': flowrate
+            }
         },
         'results': model.results,
         'units': {
+            'pressure': 'bar',
+            'temperature': '°C',
             'thickness': 'cm',
             'diameter': 'cm',
             'flowrate': 'cm³(STP) s⁻¹',
-            'pressure': 'bar',
-            'temperature': '°C',
             'diffusivity': 'cm² s⁻¹',
             'permeability': 'cm³(STP) cm⁻¹ s⁻¹ bar⁻¹',
             'solubility': 'cm³(STP) cm⁻³ bar⁻¹'
         }
     }
     
-    # Handle plotting
+    # Handle plotting and saving
     if output_dir and output_settings.get('save_plots'):
         plot_path = lambda name: os.path.join(
             output_dir, 'plots', f'{name}_{timestamp}.{output_settings["plot_format"]}'
@@ -92,7 +96,7 @@ def time_lag_analysis_workflow(
         conc_profile, flux_data = model.solve_pde(
             D=model.results['diffusivity'],
             C_eq=model.results['equilibrium_concentration'],
-            L=model.params.base.thickness,
+            L=model.params.transport.thickness,
             T=max(processed_data['time']),
             dt=1.0,
             dx=0.01

@@ -123,7 +123,7 @@ def preprocess_data(
     thickness: float,
     diameter: float,
     temp_celsius: float,
-    flowrate: Optional[float] = None,
+    flowrate: float,
     time_col: str = 'time',
     pressure_col: str = 'pressure',
 ) -> pd.DataFrame:
@@ -158,8 +158,11 @@ def preprocess_data(
     # Calculate membrane area
     area = np.pi * (diameter/2)**2  # cm²
     
-    # Calculate flux if flow rate is provided
-    if flowrate is not None:
+    # Check if flowrate is provided
+    if flowrate is None:
+        raise ValueError("Flowrate must be provided")
+    
+    else:
         df['flux'] = calculate_flux(df, flowrate, area)
         
         # Calculate cumulative flux

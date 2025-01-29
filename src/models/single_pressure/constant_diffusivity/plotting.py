@@ -44,7 +44,7 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     stab_time = model.results['stabilisation_time']
     time_lag = model.results['time_lag']
     
-    slope = model.results['permeability'] / model.params.base.thickness
+    slope = model.results['permeability'] / model.params.transport.thickness
     intercept = -slope * time_lag
     x_fit = np.linspace(0, max(data['time']), 100)
     y_fit = slope * x_fit + intercept

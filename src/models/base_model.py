@@ -19,7 +19,6 @@ class PermeationModel(ABC):
     def __init__(self, params: ModelParameters):
         """Initialize model with parameters"""
         self.params = params
-        self.area = np.pi * (params.base.diameter/2)**2  # [cm²]
         self.results: Dict[str, Any] = {}
         self._validate_parameters()
     
@@ -34,7 +33,7 @@ class PermeationModel(ABC):
                        diameter: Optional[float] = None,
                        flowrate: Optional[float] = None,
                        pressure: Optional[float] = None,
-                       temperature: float = 25.0,
+                       temperature: float = None,
                        **kwargs) -> 'PermeationModel':
         """Create model instance from parameters"""
         pass
