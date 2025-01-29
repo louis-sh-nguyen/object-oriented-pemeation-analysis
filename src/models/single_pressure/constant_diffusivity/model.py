@@ -1,59 +1,30 @@
-from typing import Tuple, Optional
 import numpy as np
 import pandas as pd
+from typing import Dict, Any, Tuple, Optional
 
 from ...base_model import PermeationModel
-from ...parameters import BaseParameters, ModelParameters, TransportParams
+from ...base_parameters import BaseParameters
+from .parameters import TimelagModelParameters, TimelagTransportParams
 from ....utils.time_analysis import find_stabilisation_time, find_time_lag
 from ....utils.data_processing import preprocess_data
 
 class TimelagModel(PermeationModel):
-    """
-    Time-lag analysis model for constant diffusivity permeation.
-    """
-    def __init__(self, params: ModelParameters):
-        """
-        Initialize TimelagModel.
-
-        Parameters
-        ----------
-
-        params : ModelParameters
-            Model parameters containing base parameters and optional diffusivity and equilibrium concentration
-        """
+    """Time-lag analysis model for constant diffusivity permeation"""
+    
+    def __init__(self, params: TimelagModelParameters):
         super().__init__(params)
-        self.results = {}
+        self.results: Dict[str, Any] = {}
     
     @classmethod
-    def from_parameters(cls, 
-                        thickness: float,
-                        diameter: float,
-                        flowrate: float,
-                        pressure: float,
-                        temperature: float = 25.0,
-                        diffusivity: Optional[float] = None,
-                        equilibrium_concentration: Optional[float] = None) -> 'TimelagModel':
-        """
-        Create model instance from manually specified parameters
-        
-        Parameters
-        ----------
-
-        thickness : float
-            Membrane thickness [cm]
-        diameter : float
-            Membrane diameter [cm]
-        flowrate : float
-            Flow rate [cm³(STP) s⁻¹]
-        pressure : float
-            Pressure [bar]
-        temperature : float
-            Temperature [°C]
-        diffusivity : float, optional
-            Diffusion coefficient [cm² s⁻¹]
-        equilibrium_concentration : float, optional
-            Equilibrium concentration [cm³(STP) cm⁻³]
-        """
+    def from_parameters(cls,
+                       thickness: float,
+                       diameter: float,
+                       flowrate: float,
+                       pressure: float,
+                       temperature: float,
+                       diffusivity: Optional[float] = None,
+                       equilibrium_concentration: Optional[float] = None) -> 'TimelagModel':
+        """Create model instance from parameters"""
         base_params = BaseParameters(
             thickness=thickness,
             diameter=diameter,
@@ -62,17 +33,17 @@ class TimelagModel(PermeationModel):
             temperature=temperature
         )
         
-        transport_params = TransportParams(
+        transport_params = TimelagTransportParams(
             diffusivity=diffusivity,
             equilibrium_concentration=equilibrium_concentration
         )
         
-        return cls(ModelParameters(base=base_params, transport=transport_params))
-    
+        return cls(TimelagModelParameters(base=base_params, transport=transport_params))
+
     def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """Fit model to experimental data"""
         processed_data = preprocess_data(
-            data, 
+            data,
             thickness=self.params.base.thickness,
             diameter=self.params.base.diameter,
             flowrate=self.params.base.flowrate,
@@ -84,23 +55,15 @@ class TimelagModel(PermeationModel):
         self.calculate_solubility_coefficient()
         self.calculate_equilibrium_concentration()
         
-        # Update transport parameters with fitted values
-        self.params.transport = TransportParams(
-            diffusivity=self.results['diffusivity'],
-            permeability=self.results['permeability'],
-            solubility_coefficient=self.results['solubility_coefficient'],
-            equilibrium_concentration=self.results['equilibrium_concentration']
-        )
-        
         return processed_data
-    
+
     def calculate_diffusivity(self, data: pd.DataFrame) -> float:
         """Calculate diffusion coefficient [cm² s⁻¹]"""
         if self.params.transport.diffusivity is not None:
             return self.params.transport.diffusivity
             
         stab_time = find_stabilisation_time(data)
-        time_lag, _ = find_time_lag(data, stab_time)
+        time_lag, stats = find_time_lag(data, stab_time)
         
         D = self.params.base.thickness**2 / (6 * time_lag)
         
@@ -109,7 +72,7 @@ class TimelagModel(PermeationModel):
         self.results['diffusivity'] = D
         
         return D
-    
+
     def calculate_permeability(self, data: pd.DataFrame) -> float:
         """Calculate permeability [cm³(STP) cm⁻¹ s⁻¹ bar⁻¹]"""
         if self.params.transport.permeability is not None:
@@ -118,12 +81,12 @@ class TimelagModel(PermeationModel):
         stab_time = self.results.get('stabilisation_time') or find_stabilisation_time(data)
         steady_state = data[data['time'] >= stab_time]
         
-        slope = np.polyfit(steady_state['time'], steady_state['cumulative flux'], 1)[0]    # update to use cumulative flux
+        slope = np.polyfit(steady_state['time'], steady_state['cumulative_flux'], 1)[0]
         P = slope * self.params.base.thickness / self.params.base.pressure
         
         self.results['permeability'] = P
         return P
-    
+
     def calculate_solubility_coefficient(self) -> float:
         """Calculate solubility coefficient [cm³(STP) cm⁻³ bar⁻¹]"""
         if self.params.transport.solubility_coefficient is not None:
@@ -135,14 +98,11 @@ class TimelagModel(PermeationModel):
         S = self.results['permeability'] / self.results['diffusivity']
         self.results['solubility_coefficient'] = S
         return S
-    
+
     def calculate_equilibrium_concentration(self) -> float:
         """Calculate equilibrium concentration [cm³(STP) cm⁻³]"""
         if self.params.transport.equilibrium_concentration is not None:
             return self.params.transport.equilibrium_concentration
-            
-        if 'permeability' not in self.results or 'diffusivity' not in self.results:
-            raise ValueError("Calculate diffusivity and permeability first")
             
         C = self.results['solubility_coefficient'] * self.params.base.pressure
         self.results['equilibrium_concentration'] = C
@@ -155,7 +115,6 @@ class TimelagModel(PermeationModel):
         
         Parameters
         ----------
-
         D : float
             Diffusion coefficient [cm² s⁻¹]
         C_eq : float
@@ -168,51 +127,34 @@ class TimelagModel(PermeationModel):
             Time step [s]
         dx : float
             Spatial step [cm]
-            
-        Returns
-        -------
-
-        Tuple[pd.DataFrame, pd.DataFrame]
-            Concentration profile and flux results
         """
-        # Validate parameters
         if dt > dx**2 / (2 * D):
             raise ValueError("Stability condition not met: dt <= dx²/(2D)")
         
-        # Calculate grid points
         Nx = int(L / dx) + 1
         Nt = int(T / dt) + 1
         
-        # Initialize arrays
         x = np.linspace(0, L, Nx)
         t = np.linspace(0, T, Nt)
         C = np.zeros(Nx)
         C_surface = np.zeros((Nt, Nx))
         flux_values = np.zeros(Nt)
         
-        # Initial condition
-        C[0] = C_eq  # Boundary condition at x=0
+        C[0] = C_eq
         
-        # Time stepping
         for n in range(Nt):
             C_new = C.copy()
             
-            # Space stepping
             for i in range(1, Nx-1):
                 C_new[i] = C[i] + D * dt / dx**2 * (C[i+1] - 2*C[i] + C[i-1])
             
-            # Boundary conditions
             C_new[0] = C_eq
             C_new[-1] = 0
             
-            # Store results
             C = C_new.copy()
             C_surface[n, :] = C
-            
-            # Calculate flux at x=L
             flux_values[n] = -D * (C[-1] - C[-2]) / dx
         
-        # Create DataFrames
         df_C = pd.DataFrame(C_surface, columns=[f'x={x_i:.3f}' for x_i in x])
         df_C.index = t
         df_flux = pd.DataFrame({'time': t, 'flux': flux_values})

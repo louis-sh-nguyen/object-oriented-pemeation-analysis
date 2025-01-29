@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from src.models.single_pressure.constant_diffusivity.workflow import time_lag_analysis_workflow
 from src.models.single_pressure.constant_diffusivity.plotting import plot_concentration_profile, plot_flux_over_time
-from src.models.parameters import BaseParameters, ModelParameters, TransportParams
+from src.models.base_parameters import BaseParameters, ModelParameters, TransportParams
 from src.models.single_pressure.constant_diffusivity.model import TimelagModel
 
 
@@ -132,7 +132,7 @@ def test_parameter_methods():
     print("\nModel 2 Parameters:")
     print(f"Base Parameters: {model2.params.base.__dict__}")
     print(f"Transport Parameters: {model2.params.transport.__dict__}")
-    
+
 if __name__ == '__main__':
     # test_model_manually()
     # test_model_fitting()

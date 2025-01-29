@@ -95,7 +95,7 @@ output/
 
 ## Parameter Structure and Model Workflow
 
-### Parameter Hierarchy
+### Parameter Classes
 ```
 parameters/
 ├── base_params/

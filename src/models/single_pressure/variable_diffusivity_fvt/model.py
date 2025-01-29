@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from ...base_model import PermeationModel
-from ...parameters import BaseParameters, ModelParameters, TransportParams
+from ...base_parameters import BaseParameters, ModelParameters, TransportParams
 from ....utils.time_analysis import find_stabilisation_time, find_time_lag
 from ....utils.data_processing import preprocess_data
 

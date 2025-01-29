@@ -163,7 +163,7 @@ def preprocess_data(
         df['flux'] = calculate_flux(df, flowrate, area)
         
         # Calculate cumulative flux
-        df['cumulative flux'] = calculate_cumulative_flux(df)
+        df['cumulative_flux'] = calculate_cumulative_flux(df)
     
     # Add metadata
     df.attrs['thickness'] = thickness

@@ -37,7 +37,7 @@ def find_time_lag(
     stabilisation_time: float,
     flux_col: str = 'flux',
     time_col: str = 'time',
-    cumulative_col: str = 'cumulative flux'
+    cumulative_col: str = 'cumulative_flux'
 ) -> Tuple[float, Dict[str, float]]:
     """Calculate time lag from steady-state portion."""
     # Get steady state data

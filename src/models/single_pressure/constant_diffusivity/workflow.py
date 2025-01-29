@@ -1,10 +1,9 @@
 import os
 import json
 import pandas as pd
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
-from ....utils.data_processing import preprocess_data
-from ...parameters import BaseParameters, ModelParameters, TransportParams
+
 from .model import TimelagModel
 from .plotting import (
     plot_timelag_analysis,
@@ -24,34 +23,16 @@ def time_lag_analysis_workflow(
         'display_plots': True,
         'save_plots': True,
         'save_data': True,
-        'plot_format': 'png',  # 'png' or 'svg'
-        'data_format': 'csv'   # 'csv' or 'json'
+        'plot_format': 'png',
+        'data_format': 'csv'
     }
 ) -> Dict[str, Any]:
-    """Execute time-lag analysis workflow
+    """Execute time-lag analysis workflow"""
     
-    Parameters
-    ----------
-    # ...existing code...
-    output_settings : Dict[str, Any], optional
-        Dictionary controlling output options:
-        - 'output_dir': Directory path for saving outputs (None for no saving)
-        - 'display_plots': Display plots on screen
-        - 'save_plots': Save plots to files (requires output_dir)
-        - 'save_data': Save data files
-        - 'plot_format': Format for saving plots ('png' or 'svg')
-        - 'data_format': Format for saving data ('csv' or 'json')
-    """
+    # Create output directories if needed
     output_dir = output_settings.get('output_dir')
-    plot_format = output_settings.get('plot_format', 'png')
-    data_format = output_settings.get('data_format', 'csv')
-    
-    # Setup output directories if saving is required
-    if output_dir and any([output_settings.get('save_plots'),
-                          output_settings.get('save_data')]):
-        os.makedirs(os.path.join(output_dir, 'data'), exist_ok=True)
-        os.makedirs(os.path.join(output_dir, 'results'), exist_ok=True)
-        os.makedirs(os.path.join(output_dir, 'plots'), exist_ok=True)
+    if output_dir and (output_settings.get('save_plots') or output_settings.get('save_data')):
+        os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     else:
         timestamp = None
@@ -59,20 +40,15 @@ def time_lag_analysis_workflow(
     # Load and process data
     data = pd.read_excel(file_path)
     
-    # Preprocess data
-    # data = preprocess_data(data, thickness=thickness, diameter=diameter, flowrate=flowrate, temp_celsius=temperature)
-    
-    # Create base parameters
-    base_params = BaseParameters(
+    # Create model and fit
+    model = TimelagModel.from_parameters(
         thickness=thickness,
         diameter=diameter,
         flowrate=flowrate,
         pressure=pressure,
         temperature=temperature
     )
-    
-    # Create and fit model, and return processed data
-    model, processed_data = TimelagModel.from_data(data, base_params)
+    processed_data = model.fit_to_data(data)
     
     # Generate results dictionary
     results_dict = {
@@ -87,32 +63,35 @@ def time_lag_analysis_workflow(
         'units': {
             'thickness': 'cm',
             'diameter': 'cm',
-            'flow_rate': 'cm³(STP) s⁻¹',
+            'flowrate': 'cm³(STP) s⁻¹',
             'pressure': 'bar',
             'temperature': '°C',
             'diffusivity': 'cm² s⁻¹',
             'permeability': 'cm³(STP) cm⁻¹ s⁻¹ bar⁻¹',
-            'equilibrium_concentration': 'cm³(STP) cm⁻³ bar⁻¹'
+            'solubility': 'cm³(STP) cm⁻³ bar⁻¹'
         }
     }
     
     # Handle plotting
-    if output_settings.get('save_plots') and output_dir:
-        plot_path = lambda name: os.path.join(output_dir, 'plots', 
-                                            f'{name}_{timestamp}.{plot_format}')
+    if output_dir and output_settings.get('save_plots'):
+        plot_path = lambda name: os.path.join(
+            output_dir, 'plots', f'{name}_{timestamp}.{output_settings["plot_format"]}'
+        )
     else:
         plot_path = lambda name: None
 
+    # Generate plots
     plot_timelag_analysis(
-        model, processed_data,
+        model, 
+        processed_data,
         save_path=plot_path('timelag_analysis'),
         display=output_settings.get('display_plots', True)
     )
     
-    if model.params.transport.diffusivity and model.params.transport.equilibrium_concentration:
+    if model.results.get('diffusivity') and model.results.get('equilibrium_concentration'):
         conc_profile, flux_data = model.solve_pde(
-            D=model.params.transport.diffusivity,
-            C_eq=model.params.transport.equilibrium_concentration,
+            D=model.results['diffusivity'],
+            C_eq=model.results['equilibrium_concentration'],
             L=model.params.base.thickness,
             T=max(processed_data['time']),
             dt=1.0,
@@ -132,17 +111,19 @@ def time_lag_analysis_workflow(
             display=output_settings.get('display_plots', True)
         )
 
-    # Handle data saving
+    # Save results
     if output_dir and output_settings.get('save_data'):
+        data_format = output_settings.get('data_format', 'csv')
         if data_format == 'csv':
-            processed_data.to_csv(os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'), 
-                       index=False)
+            processed_data.to_csv(
+                os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'),
+                index=False
+            )
             pd.DataFrame(results_dict['results']).to_csv(
                 os.path.join(output_dir, 'data', f'processed_data_{timestamp}.csv')
             )
         elif data_format == 'json':
-            with open(os.path.join(output_dir, 'results', 
-                                 f'model_results_{timestamp}.json'), 'w') as f:
+            with open(os.path.join(output_dir, 'results', f'model_results_{timestamp}.json'), 'w') as f:
                 json.dump(results_dict, f, indent=4)
 
     return results_dict
