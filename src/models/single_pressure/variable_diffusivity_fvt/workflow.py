@@ -3,6 +3,7 @@ from typing import Dict, Optional, Tuple, Any
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+from ....utils.data_processing import preprocess_data
 from ..variable_diffusivity_fvt import FVTModel
 from ..variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
@@ -197,12 +198,6 @@ def data_fitting_workflow(
         'D1_prime': 2.38,
         'DT_0': 2.87e-7
     },
-    simulation_params: Dict = {
-        'T': 100000,  # total time [s]
-        'dt': 1.0,    # time step [s]
-        'dx': 0.01,   # spatial step [adim]
-        'X': 1.0      # normalized position
-    },
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -233,8 +228,6 @@ def data_fitting_workflow(
         Initial guess for fitting parameters:
         - D1_prime: normalized diffusivity at x=0
         - DT_0: temperature-dependent diffusivity
-    simulation_params : dict, optional
-        Dictionary containing simulation parameters
     output_settings : dict, optional
         Dictionary containing output settings:
         - output_dir: Directory to save outputs (default: None)
@@ -253,24 +246,42 @@ def data_fitting_workflow(
     figures : dict
         Dictionary containing figure objects for plots
     """
-    # Load experimental data
-    experimental_data = pd.read_excel(data_path)
-    
     # Initialize model with initial parameters
     model = FVTModel.from_parameters(
         pressure=pressure,
         temperature=temperature,
         thickness=thickness,
         diameter=diameter,
-        flowrate=flowrate,  # Add flowrate parameter
+        flowrate=flowrate,
         D1_prime=initial_guess['D1_prime'],
         DT_0=initial_guess['DT_0']
     )
     
-    # Fit model to data
+    # Load experimental data
+    exp_data = pd.read_excel(data_path)
+    
+    # Preprocess data and calculate tau
+    processed_exp_data = preprocess_data(
+        exp_data,
+        thickness=model.params.transport.thickness,
+        diameter=model.params.transport.diameter,
+        flowrate=model.params.transport.flowrate,
+        temp_celsius=model.params.base.temperature,
+        truncate_at_stabilisation=True,
+    )
+    
+    # Create 'tau' column
+    processed_exp_data['tau'] = model.params.transport.DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
+    
+    # Downsample to 1000 points for faster optimization
+    if len(processed_exp_data) > 1000:
+        n = len(processed_exp_data) // 1000
+        processed_exp_data = processed_exp_data.iloc[::n].reset_index(drop=True)
+        
+    # Fit model to data with tracking
     fit_results = model.fit_to_data(
-        data=experimental_data,
-        simulation_params=simulation_params
+        data=processed_exp_data,
+        track_progress=True
     )
     
     # Run simulation with fitted parameters
@@ -279,10 +290,16 @@ def data_fitting_workflow(
         temperature=temperature,
         thickness=thickness,
         diameter=diameter,
+        flowrate=flowrate,
         D1_prime=fit_results['D1_prime'],
         DT_0=fit_results['DT_0'],
-        experimental_data=experimental_data,
-        simulation_params=simulation_params,
+        experimental_data=processed_exp_data,
+        simulation_params={
+            'T': processed_exp_data['time'].max(),
+            'X': 1.0,
+            'dt': processed_exp_data['time'].max() / 10000, # 10000 points
+            'dx': 1.0 / 100,   # 100 points
+            },
         output_settings=output_settings
     )
     

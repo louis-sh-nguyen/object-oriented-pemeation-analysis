@@ -1,12 +1,13 @@
 from typing import Tuple, Optional, Dict, Any
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 
 from ...base_model import PermeationModel
-from ...base_parameters import BaseParameters, ModelParameters
-from ....utils.time_analysis import find_stabilisation_time, find_time_lag
+from ...base_parameters import BaseParameters
 from ....utils.data_processing import preprocess_data
 from .parameters import FVTModelParameters, FVTTransportParams
+from ....utils.optimisation import OptimisationCallback
 
 class FVTModel(PermeationModel):
     """Variable diffusivity model based on Free Volume Theory (FVT)."""
@@ -125,7 +126,6 @@ class FVTModel(PermeationModel):
         F_prime = -(D_prime[:, -1] - D_prime[:, -2]) / dx
         
         # Calculate normalised flux
-        # F_norm = F_prime / (D1_prime - D2_prime)
         F_norm = F_prime / max(F_prime)
         
         # Calculate normalised time
@@ -179,7 +179,7 @@ class FVTModel(PermeationModel):
         )
     
     def fit_to_data(self, data: pd.DataFrame, 
-                    simulation_params: Optional[Dict] = None) -> Dict[str, float]:
+                    track_progress: bool = False) -> Dict[str, float]:
         """
         Fit model parameters to experimental data
         
@@ -189,21 +189,30 @@ class FVTModel(PermeationModel):
             Experimental flux data with 'time' and 'flux' columns
         simulation_params : dict, optional
             Simulation parameters for PDE solving
+        track_progress : bool, optional
+            Whether to display optimization progress (default: False)
             
         Returns
         -------
         Dict[str, float]
-            Fitted parameters (D1_prime, DT_0)
+            Fitted parameters (D1_prime, DT_0) and optimization results
         """
-        from scipy.optimize import minimize
-        
-        processed_data = preprocess_data(
-            data,
-            thickness=self.params.transport.thickness,
-            diameter=self.params.transport.diameter,
-            flowrate=self.params.transport.flowrate,
-            temp_celsius=self.params.base.temperature,
-        )
+        # Check for required columns
+        required_cols = ['tau', 'normalised_flux']
+        missing_cols = [col for col in required_cols if col not in data.columns]
+        if missing_cols:
+            raise ValueError(f"Data is missing required columns: {missing_cols}")
+
+        # Setup optimization tracking if requested
+        if track_progress:
+            callback = OptimisationCallback(
+                param_names=['D1_prime', 'DT_0'],
+            )
+        else:
+            callback = None
+            
+        # Store last objective value for callback
+        last_rmse = [float('inf')]
         
         def objective(params):
             D1_prime, DT_0 = params
@@ -211,27 +220,48 @@ class FVTModel(PermeationModel):
                 D1_prime=D1_prime,
                 DT_0=DT_0,
                 L=self.params.transport.thickness,
-                **simulation_params
+                T=data['time'].max(),
+                X=1.0,
+                dt=data['time'].max() / 10000, # 10000 points
+                dx=1.0 / 100,   # 100 points
             )
             
-            # Interpolate model flux to data time points
-            model_flux = np.interp(processed_data['time'], flux_df['time'], flux_df['flux'])
+            # Interpolate model norm flux to data time points
+            model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
             
             # Calculate RMSE
-            return np.sqrt(np.mean((model_flux - processed_data['flux'])**2))
+            rmse = np.sqrt(np.mean((model_norm_flux - data['normalised_flux'])**2))
+            last_rmse[0] = rmse
+            
+            return rmse
+        
+        def minimize_callback(xk):
+            if callback is not None:
+                callback(xk, last_rmse[0])
         
         # Initial guess from current parameters
         x0 = [self.params.transport.D1_prime, self.params.transport.DT_0]
         
-        # Optimize
-        result = minimize(objective, x0, method='Nelder-Mead')
+        # Optimize with callback
+        result = minimize(
+            objective, 
+            x0, 
+            method='Nelder-Mead',
+            callback=minimize_callback if callback is not None else None
+        )
         
         # Update model parameters
         self.params.transport.D1_prime = result.x[0]
         self.params.transport.DT_0 = result.x[1]
         
-        return {
+        fit_results = {
             'D1_prime': result.x[0],
             'DT_0': result.x[1],
             'rmse': result.fun
         }
+        
+        # Add optimization history if tracked
+        if track_progress and callback is not None:
+            fit_results['optimization_history'] = callback.history
+        
+        return fit_results

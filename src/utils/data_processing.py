@@ -168,11 +168,11 @@ def preprocess_data(data: pd.DataFrame,
     # Flux
     df['flux'] = calculate_flux(df, flowrate, area)
     
-    # Noralised flux
-    df['normalised_flux'] = df['flux'] / df['flux'].max()
-    
     # Calculate cumulative flux
     df['cumulative_flux'] = calculate_cumulative_flux(df)
+    
+    # Noralised flux
+    df['normalised_flux'] = df['flux'] / df['flux'].rolling(window=10).max()
     
     # Add metadata
     df.attrs['thickness'] = thickness

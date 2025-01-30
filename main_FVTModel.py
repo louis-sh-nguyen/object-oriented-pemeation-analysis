@@ -162,34 +162,27 @@ def test_manual_workflow():
 
 def test_data_fitting_workflow():
     """Test the FVT data fitting workflow"""
-    
-    # Run workflow
+    # Run workflow (optimization tracking is handled internally)
     model, fit_results, figures = data_fitting_workflow(
         data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
         pressure=50.0,
         temperature=25.0,
         thickness=0.1,
         diameter=1.0,
-        flowrate=8.0, 
-        initial_guess = {
+        flowrate=8.0,
+        initial_guess={
             'D1_prime': 2.38,
             'DT_0': 2.87e-7
-            },    
-        simulation_params={
-            'T': 100000,  # total time [s]
-            'dt': 1.0,    # time step [s]
-            'dx': 0.01,   # spatial step [adim]
-            'X': 1.0      # normalized position
         },
-        output_settings = {
+        output_settings={
             'output_dir': 'outputs/fitting',
             'display_plots': True,
-            'save_plots': False,
-            'save_data': False,
+            'save_plots': True,
+            'save_data': True,
             'plot_format': 'png',
             'data_format': 'csv'
-            }
-        )
+        }
+    )
     
     # Print fitting results
     print("\nFitting Results:")
