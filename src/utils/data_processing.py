@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Union, List, Tuple
 import os
+from .time_analysis import find_stabilisation_time
 
 def validate_columns(data: pd.DataFrame, required_cols: List[str]) -> bool:
     """
@@ -118,39 +119,45 @@ def calculate_cumulative_flux(
     
     return df['cumulative flux']
 
-def preprocess_data(
-    data: pd.DataFrame,
-    thickness: float,
-    diameter: float,
-    temp_celsius: float,
-    flowrate: float,
-    time_col: str = 'time',
-    pressure_col: str = 'pressure',
-) -> pd.DataFrame:
+def preprocess_data(data: pd.DataFrame,
+                   thickness: float,
+                   diameter: float,
+                   flowrate: float,
+                   temp_celsius: float,
+                   truncate_at_stabilisation: bool = False) -> pd.DataFrame:
     """
-    Preprocess raw experimental data.
+    Preprocess experimental permeation data for analysis
     
     Parameters
     ----------
     data : pd.DataFrame
-        Raw experimental data
+        Raw experimental data containing columns:
+        - 'time': Time values [s]
     thickness : float
         Membrane thickness [cm]
     diameter : float
         Membrane diameter [cm]
-    flowrate : float, optional
-        Carrier gas flow rate [cm³/s]
+    flowrate : float
+        Volumetric flow rate [cm³(STP) min⁻¹]
     temp_celsius : float
         Temperature [°C]
-    time_col : str
-        Name of time column
-    pressure_col : str
-        Name of pressure column
+    truncate_at_stabilisation : bool, optional
+        Whether to truncate data at stabilisation time (default: False)
+        If True, adds 'stabilisation_time' to DataFrame.attrs
     
     Returns
     -------
     pd.DataFrame
-        Processed data with calculated parameters
+        Processed data with columns:
+        - 'Time(s)': Time values [s]
+        - 'Flux(cm³(STP)/cm².s)': Flux values [cm³(STP) cm⁻² s⁻¹]
+        - 'cumulative_flux': Cumulative flux [cm³(STP) cm⁻²]
+        
+    Notes
+    -----
+    - If flux column not present, calculates it from flowrate divided by membrane area
+    - Cumulative flux is calculated by time integration of flux
+    - If truncate_at_stabilisation=True, only returns data up to stabilisation time
     """
     # Create copy to avoid modifying original
     df = data.copy()
@@ -158,15 +165,14 @@ def preprocess_data(
     # Calculate membrane area
     area = np.pi * (diameter/2)**2  # cm²
     
-    # Check if flowrate is provided
-    if flowrate is None:
-        raise ValueError("Flowrate must be provided")
+    # Flux
+    df['flux'] = calculate_flux(df, flowrate, area)
     
-    else:
-        df['flux'] = calculate_flux(df, flowrate, area)
-        
-        # Calculate cumulative flux
-        df['cumulative_flux'] = calculate_cumulative_flux(df)
+    # Noralised flux
+    df['normalised_flux'] = df['flux'] / df['flux'].max()
+    
+    # Calculate cumulative flux
+    df['cumulative_flux'] = calculate_cumulative_flux(df)
     
     # Add metadata
     df.attrs['thickness'] = thickness
@@ -174,6 +180,13 @@ def preprocess_data(
     df.attrs['area'] = area
     df.attrs['temperature'] = temp_celsius
     
+    # Find stabilisation time and truncate if requested
+    if truncate_at_stabilisation:
+        stab_time = find_stabilisation_time(df)
+        df = df[df['time'] <= stab_time].copy()
+        
+        # Add stabilisation time to metadata
+        df.attrs['stabilisation_time'] = stab_time
     return df
 
 def calculate_derived_parameters(

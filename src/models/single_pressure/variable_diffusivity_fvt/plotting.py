@@ -23,7 +23,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
         Whether to display the plot (default: True)
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots()
     else:
         fig = ax.figure
     set_style()
@@ -43,7 +43,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     
     if save_path:
         plt.tight_layout()
-        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        fig.savefig(save_path, dpi=1200, bbox_inches='tight')
     
     if display:
         plt.tight_layout()
@@ -74,8 +74,12 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
     display : bool, optional
         Whether to display the plot (default: True)
     """
+    # Check if 'time' and 'flux' columns are present
+    if 'time' not in flux_data.columns or 'flux' not in flux_data.columns:
+        raise ValueError("Missing required columns: 'time', 'flux'")
+    
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots()
     else:
         fig = ax.figure
     set_style()
@@ -89,14 +93,71 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
                 'ko', label='Experimental', alpha=0.5)
     
     ax.set_xlabel('Time / s')
-    ax.set_ylabel('Flux / cm³(STP) cm⁻² s⁻¹')
+    ax.set_ylabel('Dimensionless Flux')
     ax.set_title('Flux Evolution')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
     if save_path:
         plt.tight_layout()
-        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        fig.savefig(save_path, dpi=1200, bbox_inches='tight')
+    
+    if display:
+        plt.tight_layout()
+        plt.show()
+    # else:
+    #     plt.close(fig)
+    
+    return fig, ax
+
+def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
+                            experimental_data: Optional[pd.DataFrame] = None,
+                            ax: Optional[plt.Axes] = None,
+                            save_path: Optional[str] = None,
+                            display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot normalised flux evolution over normalised time
+    
+    Parameters
+    ----------
+    flux_data : pd.DataFrame
+        Model flux data
+    experimental_data : pd.DataFrame, optional
+        Experimental flux data
+    ax : plt.Axes, optional
+        Matplotlib axes for plotting
+    save_path : str, optional
+        Path to save the figure
+    display : bool, optional
+        Whether to display the plot (default: True)
+    """
+    # Check if 'time' and 'normalised_flux' columns are present
+    if 'tau' not in flux_data.columns or 'normalised_flux' not in flux_data.columns:
+        raise ValueError("Missing required columns: 'tau', 'normalised_flux'")
+    
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+    set_style()
+    
+    # Plot calculated flux
+    ax.plot(flux_data['tau'], flux_data['normalised_flux'], 'b-', label='Model')
+    
+    # Plot experimental data if provided
+    if experimental_data is not None:
+        ax.plot(experimental_data['tau'], experimental_data['normalised_flux'],
+                'ko', label='Experimental', alpha=0.5)
+    
+    ax.set_xlabel(r'$\tau$')
+    ax.set_ylabel('Normalised Flux')
+    ax.set_title('Flux Evolution')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.tight_layout()
+        fig.savefig(save_path, dpi=1200, bbox_inches='tight')
     
     if display:
         plt.tight_layout()
@@ -131,7 +192,7 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
         Whether to display the plot (default: True)
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots()
     else:
         fig = ax.figure
     set_style()
@@ -154,7 +215,7 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
     
     if save_path:
         plt.tight_layout()
-        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        fig.savefig(save_path, dpi=1200, bbox_inches='tight')
     
     if display:
         plt.tight_layout()

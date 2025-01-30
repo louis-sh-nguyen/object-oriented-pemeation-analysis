@@ -22,10 +22,29 @@ class FVTModel(PermeationModel):
                        temperature: float,
                        thickness: float,
                        diameter: float,
+                       flowrate: float,
                        D1_prime: Optional[float] = None,
-                       D2_prime: Optional[float] = None,
-                       D0_T: Optional[float] = None) -> 'FVTModel':
-        """Create model instance from parameters"""
+                       DT_0: Optional[float] = None) -> 'FVTModel':
+        """
+        Create model instance from parameters
+        
+        Parameters
+        ----------
+        pressure : float
+            Applied pressure [bar]
+        temperature : float
+            Temperature [°C]
+        thickness : float
+            Membrane thickness [cm]
+        diameter : float
+            Membrane diameter [cm]
+        flowrate : float
+            Flow rate [cm³(STP) min⁻¹]
+        D1_prime : float, optional
+            Normalized diffusivity at x=0 [adim]
+        DT_0 : float, optional
+            Temperature-dependent diffusivity [cm² s⁻¹]
+        """
         base_params = BaseParameters(
             pressure=pressure,
             temperature=temperature
@@ -34,40 +53,55 @@ class FVTModel(PermeationModel):
         transport_params = FVTTransportParams(
             thickness=thickness,
             diameter=diameter,
+            flowrate=flowrate,
             D1_prime=D1_prime,
-            D2_prime=D2_prime,
-            D0_T=D0_T
+            DT_0=DT_0
         )
         
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
     
-    def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        pass
-    
-    def solve_pde(self, D1_prime: float, D2_prime: float, D0_T: float, 
-                  T: float, X:float, L:float, dt: float, dx: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _solve_pde(self, D1_prime: float, DT_0: float, 
+                   T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Solve concentration profile using finite volume method.
+        Internal method to solve the Free Volume Theory (FVT) diffusion equation:
+        ∂D'/∂t = (D0(T)/L²) * D' * ∂²D'/∂x²
         
         Parameters
         ----------
         D1_prime : float
-            Base diffusivity [cm² s⁻¹]
-        D2_prime : float
-            Concentration-dependent diffusivity [cm² s⁻¹ cm³(STP)/cm³]
+            Normalized diffusivity at upstream boundary (x=0) [dimensionless]
+            D'(x=0) = D1' = exp(-U/(V'W))
+        DT_0 : float
+            Temperature-dependent diffusion coefficient [cm² s⁻¹]
+            D0(T) = D0 * exp(-Ed/RT)
+        U_VprimeW : float
+            Energy barrier parameter [dimensionless]
+            U/(V'W) = ln(D1')
+        T : float
+            Total simulation time [s]
+        X : float
+            Normalized membrane thickness [dimensionless]
+            x' = x/L where L is the membrane thickness
         L : float
             Membrane thickness [cm]
-        T : float
-            Total time [s]
         dt : float
             Time step [s]
         dx : float
-            Spatial step [cm]
+            Normalized spatial step [dimensionless]
+        D2_prime : float, optional
+            Normalized diffusivity at downstream boundary (x=L) [dimensionless]
+            Default is 1.0 (no concentration dependence at x=L)
         
         Returns
         -------
         Tuple[pd.DataFrame, pd.DataFrame]
-            Concentration profile and flux data
+            - Diffusivity profile D'(x,t) [dimensionless]
+            - Normalized flux F'(t) = -∂D'/∂x at x=L [dimensionless]
+        
+        Notes
+        -----
+        The PDE is solved using an explicit finite difference method.
+        Stability condition: dt ≤ dx²/(2*D0(T)/L²*D')
         """
         # Define spatial and temporal grids
         x = np.arange(0, X+dx, dx)
@@ -76,29 +110,128 @@ class FVTModel(PermeationModel):
         # Initialize D' profile
         D_prime = np.zeros((len(t), len(x)))  # (time, space)
         
-        # Set initial condition
+        # Set initial and boundary conditions
         D_prime[0, :] = 1.0     # t=0
-        
-        # Set boundary conditions
         D_prime[:, 0] = D1_prime     # x=0
         D_prime[:, -1] = D2_prime    # x=L
         
         # Solve PDE
-        for n in range(1, len(t)):  # skip t=0
-            for i in range(1, len(x)-1):    # skip x=0 and x=L
+        for n in range(1, len(t)):
+            for i in range(1, len(x)-1):
                 d2Dprime_dx2 = (D_prime[n-1, i+1] - 2*D_prime[n-1, i] + D_prime[n-1, i-1]) / dx**2
-                D_prime[n, i] = D_prime[n-1, i] + dt * (D0_T / L**2 * D_prime[n-1, i] * d2Dprime_dx2)
-        
-        # Boundary conditions
-        # D_prime[:, 0] = 1.0
-        # D_prime[:, -1] = 0.0
+                D_prime[n, i] = D_prime[n-1, i] + dt * (DT_0 / L**2 * D_prime[n-1, i] * d2Dprime_dx2)
         
         # Calculate flux
-        # F_prime = np.zeros(len(t))
         F_prime = -(D_prime[:, -1] - D_prime[:, -2]) / dx
         
-        # Dataframe
+        # Calculate normalised flux
+        # F_norm = F_prime / (D1_prime - D2_prime)
+        F_norm = F_prime / max(F_prime)
+        
+        # Calculate normalised time
+        tau = DT_0 * t / L**2   # [adim]
+        
+        # Create DataFrames
         Dprime_df = pd.DataFrame(D_prime, columns=[f'x={x_i:.3f}' for x_i in x])
-        flux_df = pd.DataFrame({'time': t, 'flux': F_prime})
+        flux_df = pd.DataFrame({'time': t, 
+                                'flux': F_prime, 
+                                'tau': tau,
+                                'normalised_flux': F_norm,
+                                })
         
         return Dprime_df, flux_df
+    
+    def solve_pde(self, simulation_params: Optional[Dict] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Solve PDE using model parameters
+        
+        Parameters
+        ----------
+        simulation_params : dict, optional
+            Dictionary containing simulation parameters:
+            - T: total time [s]
+            - dt: time step [s]
+            - dx: spatial step [normalized]
+            - X: normalized position
+        
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame]
+            Diffusivity profile and flux data
+        """
+        if simulation_params is None:
+            simulation_params = {
+                'T': 100000,
+                'dt': 1.0,
+                'dx': 0.01,
+                'X': 1.0
+            }
+        
+        return self._solve_pde(
+            D1_prime=self.params.transport.D1_prime,
+            D2_prime=1.0,
+            DT_0=self.params.transport.DT_0,
+            T=simulation_params['T'],
+            X=simulation_params['X'],
+            L=self.params.transport.thickness,
+            dt=simulation_params['dt'],
+            dx=simulation_params['dx']
+        )
+    
+    def fit_to_data(self, data: pd.DataFrame, 
+                    simulation_params: Optional[Dict] = None) -> Dict[str, float]:
+        """
+        Fit model parameters to experimental data
+        
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Experimental flux data with 'time' and 'flux' columns
+        simulation_params : dict, optional
+            Simulation parameters for PDE solving
+            
+        Returns
+        -------
+        Dict[str, float]
+            Fitted parameters (D1_prime, DT_0)
+        """
+        from scipy.optimize import minimize
+        
+        processed_data = preprocess_data(
+            data,
+            thickness=self.params.transport.thickness,
+            diameter=self.params.transport.diameter,
+            flowrate=self.params.transport.flowrate,
+            temp_celsius=self.params.base.temperature,
+        )
+        
+        def objective(params):
+            D1_prime, DT_0 = params
+            _, flux_df = self._solve_pde(
+                D1_prime=D1_prime,
+                DT_0=DT_0,
+                L=self.params.transport.thickness,
+                **simulation_params
+            )
+            
+            # Interpolate model flux to data time points
+            model_flux = np.interp(processed_data['time'], flux_df['time'], flux_df['flux'])
+            
+            # Calculate RMSE
+            return np.sqrt(np.mean((model_flux - processed_data['flux'])**2))
+        
+        # Initial guess from current parameters
+        x0 = [self.params.transport.D1_prime, self.params.transport.DT_0]
+        
+        # Optimize
+        result = minimize(objective, x0, method='Nelder-Mead')
+        
+        # Update model parameters
+        self.params.transport.D1_prime = result.x[0]
+        self.params.transport.DT_0 = result.x[1]
+        
+        return {
+            'D1_prime': result.x[0],
+            'DT_0': result.x[1],
+            'rmse': result.fun
+        }
