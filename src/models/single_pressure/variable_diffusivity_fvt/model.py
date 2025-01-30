@@ -246,7 +246,8 @@ class FVTModel(PermeationModel):
         result = minimize(
             objective, 
             x0, 
-            method='Nelder-Mead',
+            # method='Nelder-Mead',
+            method='BFGS',
             callback=minimize_callback if callback is not None else None
         )
         

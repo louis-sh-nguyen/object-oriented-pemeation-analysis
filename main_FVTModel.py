@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from src.models.base_parameters import BaseParameters
+import warnings
 from src.models.single_pressure.variable_diffusivity_fvt import (
     FVTModel,
     FVTModelParameters,
@@ -162,6 +163,8 @@ def test_manual_workflow():
 
 def test_data_fitting_workflow():
     """Test the FVT data fitting workflow"""
+    # Turn off warning messages
+    warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
     model, fit_results, figures = data_fitting_workflow(
         data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
@@ -190,8 +193,63 @@ def test_data_fitting_workflow():
     print(f"DT_0: {fit_results['DT_0']:.4e}")
     print(f"RMSE: {fit_results['rmse']:.4e}")
 
+def test_parameter_sensitivity():
+    """Test combined effect of D1_prime and DT_0 on normalized flux vs tau curve"""
+    
+    # Base simulation parameters
+    sim_params = {
+        'T': 20000,  # total time [s]
+        'dt': 1.0,    # time step [s]
+        'dx': 0.001,   # spatial step [adim]
+        'X': 1.0      # normalized position
+    }
+    
+    # Test different parameter combinations
+    D1_primes = [1.0, 2.0, 3.0 ]  # Range of D1_prime values
+    DT_0s = [1e-7, 2.e-7, 3e-7]  # Range of DT_0 values
+    
+    # Create figure
+    plt.figure(figsize=(10, 6))
+    
+    # Color map for D1_prime and line styles for DT_0
+    colors = ['b', 'g', 'r']
+    styles = ['-', '--', ':']
+    
+    # Test all combinations
+    for i, D1_prime in enumerate(D1_primes):
+        for j, DT_0 in enumerate(DT_0s):
+            model = FVTModel.from_parameters(
+                pressure=50.0,
+                temperature=25.0,
+                thickness=0.1,
+                diameter=1.0,
+                flowrate=8.0,
+                D1_prime=D1_prime,
+                DT_0=DT_0
+            )
+            
+            _, flux_df = model.solve_pde(simulation_params=sim_params)
+            plt.plot(flux_df['tau'], flux_df['normalised_flux'], 
+                    color=colors[i], linestyle=styles[j],
+                    label=f'D1_prime={D1_prime:.1f}, DT_0={DT_0:.1e}')
+    
+    plt.xlabel(r'$\tau$ (Dimensionless Time)')
+    plt.ylabel('Normalised Flux')
+    plt.title('Combined Effect of D1_prime and DT_0')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print key observations
+    print("\nParameter Sensitivity Analysis:")
+    print("1. D1_prime (colors) affects: Initial rise rate and curve shape")
+    print("2. DT_0 (line styles) affects: Time scaling and approach to steady state")
+
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
     # test_manual_workflow()
     test_data_fitting_workflow()
+    # test_parameter_sensitivity()
