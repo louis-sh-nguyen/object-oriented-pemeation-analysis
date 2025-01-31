@@ -61,86 +61,161 @@ class FVTModel(PermeationModel):
         
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
     
-    def _solve_pde(self, D1_prime: float, DT_0: float, 
-                   T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Internal method to solve the Free Volume Theory (FVT) diffusion equation:
-        ∂D'/∂t = (D0(T)/L²) * D' * ∂²D'/∂x²
+    # def _solve_pde(self, D1_prime: float, DT_0: float, 
+    #                T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    #     """
+    #     Internal method to solve the Free Volume Theory (FVT) diffusion equation:
+    #     ∂D'/∂t = (D0(T)/L²) * D' * ∂²D'/∂x²
         
-        Parameters
-        ----------
-        D1_prime : float
-            Normalized diffusivity at upstream boundary (x=0) [dimensionless]
-            D'(x=0) = D1' = exp(-U/(V'W))
-        DT_0 : float
-            Temperature-dependent diffusion coefficient [cm² s⁻¹]
-            D0(T) = D0 * exp(-Ed/RT)
-        U_VprimeW : float
-            Energy barrier parameter [dimensionless]
-            U/(V'W) = ln(D1')
-        T : float
-            Total simulation time [s]
-        X : float
-            Normalized membrane thickness [dimensionless]
-            x' = x/L where L is the membrane thickness
-        L : float
-            Membrane thickness [cm]
-        dt : float
-            Time step [s]
-        dx : float
-            Normalized spatial step [dimensionless]
-        D2_prime : float, optional
-            Normalized diffusivity at downstream boundary (x=L) [dimensionless]
-            Default is 1.0 (no concentration dependence at x=L)
+    #     Parameters
+    #     ----------
+    #     D1_prime : float
+    #         Normalized diffusivity at upstream boundary (x=0) [dimensionless]
+    #         D'(x=0) = D1' = exp(-U/(V'W))
+    #     DT_0 : float
+    #         Temperature-dependent diffusion coefficient [cm² s⁻¹]
+    #         D0(T) = D0 * exp(-Ed/RT)
+    #     U_VprimeW : float
+    #         Energy barrier parameter [dimensionless]
+    #         U/(V'W) = ln(D1')
+    #     T : float
+    #         Total simulation time [s]
+    #     X : float
+    #         Normalized membrane thickness [dimensionless]
+    #         x' = x/L where L is the membrane thickness
+    #     L : float
+    #         Membrane thickness [cm]
+    #     dt : float
+    #         Time step [s]
+    #     dx : float
+    #         Normalized spatial step [dimensionless]
+    #     D2_prime : float, optional
+    #         Normalized diffusivity at downstream boundary (x=L) [dimensionless]
+    #         Default is 1.0 (no concentration dependence at x=L)
         
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame]
-            - Diffusivity profile D'(x,t) [dimensionless]
-            - Normalized flux F'(t) = -∂D'/∂x at x=L [dimensionless]
+    #     Returns
+    #     -------
+    #     Tuple[pd.DataFrame, pd.DataFrame]
+    #         - Diffusivity profile D'(x,t) [dimensionless]
+    #         - Normalized flux F'(t) = -∂D'/∂x at x=L [dimensionless]
         
-        Notes
-        -----
-        The PDE is solved using an explicit finite difference method.
-        Stability condition: dt ≤ dx²/(2*D0(T)/L²*D')
-        """
-        # Define spatial and temporal grids
-        x = np.arange(0, X+dx, dx)
-        t = np.arange(0, T+dt, dt)
+    #     Notes
+    #     -----
+    #     The PDE is solved using an explicit finite difference method.
+    #     Stability condition: dt ≤ dx²/(2*D0(T)/L²*D')
+    #     """
+    #     # Define spatial and temporal grids
+    #     x = np.arange(0, X+dx, dx)
+    #     t = np.arange(0, T+dt, dt)
         
-        # Initialize D' profile
-        D_prime = np.zeros((len(t), len(x)))  # (time, space)
+    #     # Initialize D' profile
+    #     D_prime = np.zeros((len(t), len(x)))  # (time, space)
         
-        # Set initial and boundary conditions
+    #     # Set initial and boundary conditions
+    #     D_prime[0, :] = 1.0     # t=0
+    #     D_prime[:, 0] = D1_prime     # x=0
+    #     D_prime[:, -1] = D2_prime    # x=L
+        
+    #     # Solve PDE
+    #     for n in range(1, len(t)):
+    #         for i in range(1, len(x)-1):
+    #             d2Dprime_dx2 = (D_prime[n-1, i+1] - 2*D_prime[n-1, i] + D_prime[n-1, i-1]) / dx**2
+    #             D_prime[n, i] = D_prime[n-1, i] + dt * (DT_0 / L**2 * D_prime[n-1, i] * d2Dprime_dx2)
+        
+    #     # Calculate flux
+    #     F_prime = -(D_prime[:, -1] - D_prime[:, -2]) / dx
+        
+    #     # Calculate normalised flux
+    #     F_norm = F_prime / max(F_prime)
+        
+    #     # Calculate normalised time
+    #     tau = DT_0 * t / L**2   # [adim]
+        
+    #     # Create DataFrames
+    #     Dprime_df = pd.DataFrame(D_prime, columns=[f'x={x_i:.3f}' for x_i in x])
+    #     flux_df = pd.DataFrame({'time': t, 
+    #                             'flux': F_prime, 
+    #                             'tau': tau,
+    #                             'normalised_flux': F_norm,
+    #                             })
+        
+    #     return Dprime_df, flux_df
+    
+    def _solve_pde(self, D1_prime: float, DT_0: float, T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Solve PDE with stability monitoring"""
+        # Grid setup
+        Nx = int(X/dx) + 1
+        Nt = int(T/dt) + 1
+        
+        # Initialize arrays with proper boundary conditions
+        x = np.linspace(0, X, Nx)
+        t = np.linspace(0, T, Nt)
+        D_prime = np.zeros((Nt, Nx))
+        
+        # Initial conditions
         D_prime[0, :] = 1.0     # t=0
+        
+        # Boundary conditions
         D_prime[:, 0] = D1_prime     # x=0
         D_prime[:, -1] = D2_prime    # x=L
         
-        # Solve PDE
-        for n in range(1, len(t)):
-            for i in range(1, len(x)-1):
+        # Time stepping with value checks
+        for n in range(1, Nt):
+            # Copy previous timestep
+            D_prime[n] = D_prime[n-1].copy()
+            
+            # Space stepping with bounds checking
+            for i in range(1, Nx-1):
+                # Calculate second derivative
                 d2Dprime_dx2 = (D_prime[n-1, i+1] - 2*D_prime[n-1, i] + D_prime[n-1, i-1]) / dx**2
-                D_prime[n, i] = D_prime[n-1, i] + dt * (DT_0 / L**2 * D_prime[n-1, i] * d2Dprime_dx2)
+                
+                # Validate
+                if not np.isfinite(d2Dprime_dx2):
+                    print(f"Non-finite d2Dprime_dx2 at t={t[n]:.2e}, x={x[i]:.2e}")
+                    print(f"Values: {D_prime[n-1, i+1]:.2e}, {D_prime[n-1, i]:.2e}, {D_prime[n-1, i-1]:.2e}")
+                
+                # Update with stability check
+                # D_new = D_prime[n-1, i] + dt * (DT_0/L**2) * D_prime[n-1, i] * d2Dprime_dx2
+                term1 = dt * (DT_0/L**2)
+                term2 = D_prime[n-1, i] * d2Dprime_dx2
+                D_new = D_prime[n-1, i] + term1 * term2
+        
+                if not np.isfinite(D_new):
+                    print(f"Non-finite D_new at t={t[n]:.2e}, x={x[i]:.2e}")
+                    print(f"Components: term1={term1:.2e}, term2={term2:.2e}")
+                    print(f"Previous D={D_prime[n-1, i]:.2e}")
+                    print(f"d2Dprime_dx2={d2Dprime_dx2:.2e}")
+                
+                # Validate 
+                if not np.isfinite(D_new):
+                    raise ValueError(f"Non-finite value encountered at t={t[n]:.2e}, x={x[i]:.2e}")
+                
+                D_prime[n, i] = D_new
+            
+            # Enforce boundary conditions
+            D_prime[n, 0] = D1_prime   # Fixed inlet diffusivity
+            D_prime[n, -1] = D2_prime  # Fixed outlet diffusivity
+            
+            # Monitor solution stability
+            if not np.all(np.isfinite(D_prime[n])):
+                raise ValueError(f"Solution became unstable at t={t[n]:.2e}")
         
         # Calculate flux
-        F_prime = -(D_prime[:, -1] - D_prime[:, -2]) / dx
+        F_norm = (-(D_prime[:, -1] - D_prime[:, -2]) / dx) / (-(D2_prime - D1_prime) / X)
         
-        # Calculate normalised flux
-        F_norm = F_prime / max(F_prime)
-        
-        # Calculate normalised time
-        tau = DT_0 * t / L**2   # [adim]
-        
-        # Create DataFrames
+        # Create output DataFrames
         Dprime_df = pd.DataFrame(D_prime, columns=[f'x={x_i:.3f}' for x_i in x])
-        flux_df = pd.DataFrame({'time': t, 
-                                'flux': F_prime, 
-                                'tau': tau,
-                                'normalised_flux': F_norm,
-                                })
+        Dprime_df.index = t
+        
+        flux_df = pd.DataFrame({
+            'time': t,
+            # 'flux': F_prime,
+            'normalised_flux': F_norm,
+            'tau': DT_0 * t / L**2
+        })
         
         return Dprime_df, flux_df
-    
+
     def solve_pde(self, simulation_params: Optional[Dict] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Solve PDE using model parameters
@@ -159,6 +234,7 @@ class FVTModel(PermeationModel):
         Tuple[pd.DataFrame, pd.DataFrame]
             Diffusivity profile and flux data
         """
+        # Parameter validation
         if simulation_params is None:
             simulation_params = {
                 'T': 100000,
@@ -167,13 +243,26 @@ class FVTModel(PermeationModel):
                 'X': 1.0
             }
         
+        # Stability check
+        # Calculate maximum diffusivity
+        D_max = self.params.transport.DT_0 * self.params.transport.D1_prime
+        
+        # Check stability criterion
+        stability_dt = simulation_params['dx']**2 / (2 * D_max)
+        if simulation_params['dt'] > stability_dt:
+            raise ValueError(
+                f"Stability condition not met: dt ({simulation_params['dt']:.2e}) > dx²/2D ({stability_dt:.2e})\n"
+                f"Decrease dt or increase dx"
+            )
+        
+        # Call _solve_pde
         return self._solve_pde(
+            L=self.params.transport.thickness,
             D1_prime=self.params.transport.D1_prime,
             D2_prime=1.0,
             DT_0=self.params.transport.DT_0,
             T=simulation_params['T'],
             X=simulation_params['X'],
-            L=self.params.transport.thickness,
             dt=simulation_params['dt'],
             dx=simulation_params['dx']
         )
@@ -217,9 +306,9 @@ class FVTModel(PermeationModel):
         def objective(params):
             D1_prime, DT_0 = params
             _, flux_df = self._solve_pde(
+                L=self.params.transport.thickness,
                 D1_prime=D1_prime,
                 DT_0=DT_0,
-                L=self.params.transport.thickness,
                 T=data['time'].max(),
                 X=1.0,
                 dt=data['time'].max() / 10000, # 10000 points
@@ -230,7 +319,7 @@ class FVTModel(PermeationModel):
             model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
             
             # Calculate RMSE
-            rmse = np.sqrt(np.mean((model_norm_flux - data['normalised_flux'])**2))
+            rmse = np.sqrt(np.mean((data['normalised_flux'] - model_norm_flux)**2))
             last_rmse[0] = rmse
             
             return rmse
@@ -241,13 +330,15 @@ class FVTModel(PermeationModel):
         
         # Initial guess from current parameters
         x0 = [self.params.transport.D1_prime, self.params.transport.DT_0]
+        bounds = [(0.1, 100), (1e-10, 1e-4)] # [(D1_min, D1_max), (DT0_min, DT0_max)]
         
         # Optimize with callback
         result = minimize(
             objective, 
             x0, 
             # method='Nelder-Mead',
-            method='BFGS',
+            method='L-BFGS-B',
+            bounds=bounds,
             callback=minimize_callback if callback is not None else None
         )
         

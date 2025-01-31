@@ -267,15 +267,15 @@ def data_fitting_workflow(
         diameter=model.params.transport.diameter,
         flowrate=model.params.transport.flowrate,
         temp_celsius=model.params.base.temperature,
-        truncate_at_stabilisation=True,
+        truncate_at_stabilisation=False,
     )
     
     # Create 'tau' column
     processed_exp_data['tau'] = model.params.transport.DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
     
     # Downsample to 1000 points for faster optimization
-    if len(processed_exp_data) > 10000:
-        n = len(processed_exp_data) // 10000
+    if len(processed_exp_data) > 1000:
+        n = len(processed_exp_data) // 1000
         processed_exp_data = processed_exp_data.iloc[::n].reset_index(drop=True)
         
     # Fit model to data with tracking

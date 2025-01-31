@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from src.models.base_parameters import BaseParameters
 import warnings
+from src.utils.plotting import set_style
 from src.models.single_pressure.variable_diffusivity_fvt import (
     FVTModel,
     FVTModelParameters,
@@ -72,14 +73,24 @@ def test_pde_solving():
         D1_prime=2.38,
         DT_0=2.87e-7
     )
-    
-    # Set simulation parameters
+
     sim_params = {
-        'T': 100000,  # total time [s]
-        'dt': 1.0,    # time step [s]
+        'T': 60000,  # total time [s]
+        'dt': 0.010,    # time step [s]
         'dx': 0.01,   # spatial step [adim]
         'X': 1.0      # normalized position
     }
+    # Calculate maximum stable dt
+    # dx = 0.02  # Smaller spatial step
+    # D_max = model.params.transport.DT_0 * model.params.transport.D1_prime
+    # dt_max = dx**2 / (2 * D_max)
+    
+    # sim_params = {
+    #     'T': 60000,          # total time [s]
+    #     'dt': 10,  # time step with safety factor, lower better
+    #     'dx': dx,            # spatial step [adim], higher better
+    #     'X': 1.0             # normalised position
+    # }
     
     # Solve PDE
     Dprime_df, flux_df = model.solve_pde(simulation_params=sim_params)
@@ -87,11 +98,9 @@ def test_pde_solving():
     print("\nPDE Solution Results:")
     print(f"Time points: {len(flux_df)}")
     print(f"Spatial points: {len(Dprime_df.columns)}")
-    print(f"Max flux: {flux_df['flux'].max():.4e}")
-    print(f"Min flux: {flux_df['flux'].min():.4e}")
     
     # Plot results
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 9))
+    fig, ((ax1, ax2, ax3)) = plt.subplots(1, 3, figsize=(16, 4))
     
     # Plot diffusivity profile evolution
     plot_diffusivity_profile(
@@ -109,17 +118,10 @@ def test_pde_solving():
         display=False
     )
     
-    # Plot flux evolution
-    plot_flux_over_time(
-        flux_data=flux_df,
-        ax=ax3,
-        display=False
-    )
-    
     # Plot normalized flux evolution
     plot_norm_flux_over_tau(
         flux_data=flux_df,
-        ax=ax4,
+        ax=ax3,
         display=False
     )
     
@@ -164,7 +166,7 @@ def test_manual_workflow():
 def test_data_fitting_workflow():
     """Test the FVT data fitting workflow"""
     # Turn off warning messages
-    warnings.filterwarnings('ignore')
+    # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
     model, fit_results, figures = data_fitting_workflow(
         data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
@@ -198,22 +200,24 @@ def test_parameter_sensitivity():
     
     # Base simulation parameters
     sim_params = {
-        'T': 20000,  # total time [s]
-        'dt': 1.0,    # time step [s]
-        'dx': 0.001,   # spatial step [adim]
-        'X': 1.0      # normalized position
+        'T': 6e4,  # total time [s]
+        'X': 1.0,      # normalized position
+        'dt': 1,    # time step [s]
+        'dx': 0.005   # spatial step [adim]
     }
     
     # Test different parameter combinations
-    D1_primes = [1.0, 2.0, 3.0 ]  # Range of D1_prime values
-    DT_0s = [1e-7, 2.e-7, 3e-7]  # Range of DT_0 values
+    D1_primes = [1.0, 2.0, 3.0]  # Range of D1_prime values
+    # D1_primes = [5.0]  # Range of D1_prime values
+    DT_0s = [1e-7, 3.e-7, 5e-7]  # Range of DT_0 values
     
     # Create figure
+    set_style()
     plt.figure(figsize=(10, 6))
     
     # Color map for D1_prime and line styles for DT_0
     colors = ['b', 'g', 'r']
-    styles = ['-', '--', ':']
+    styles = [':', '--', '-']
     
     # Test all combinations
     for i, D1_prime in enumerate(D1_primes):
@@ -243,13 +247,13 @@ def test_parameter_sensitivity():
     plt.show()
     
     # Print key observations
-    print("\nParameter Sensitivity Analysis:")
-    print("1. D1_prime (colors) affects: Initial rise rate and curve shape")
-    print("2. DT_0 (line styles) affects: Time scaling and approach to steady state")
+    # print("\nParameter Sensitivity Analysis:")
+    # print("1. D1_prime (colors) affects: Initial rise rate and curve shape")
+    # print("2. DT_0 (line styles) affects: Time scaling and approach to steady state")
 
 if __name__ == '__main__':
     # test_model_creation()
-    # test_pde_solving()
+    test_pde_solving()
     # test_manual_workflow()
-    test_data_fitting_workflow()
+    # test_data_fitting_workflow()
     # test_parameter_sensitivity()

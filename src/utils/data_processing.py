@@ -182,7 +182,7 @@ def preprocess_data(data: pd.DataFrame,
     
     # Find stabilisation time and truncate if requested
     if truncate_at_stabilisation:
-        stab_time = find_stabilisation_time(df)
+        stab_time = find_stabilisation_time(df, threshold=0.005)
         df = df[df['time'] <= stab_time].copy()
         
         # Add stabilisation time to metadata
