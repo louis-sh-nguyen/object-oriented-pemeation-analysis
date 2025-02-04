@@ -13,8 +13,7 @@ from ..variable_diffusivity_fvt.plotting import (
 
 # Default settings dictionaries
 DEFAULT_SIMULATION_PARAMS = {
-    'T': 100000,  # total time [s]
-    'dt': 1.0,    # time step [s]
+    'T': 10e3,  # total time [s]
     'dx': 0.01,   # spatial step [adim]
     'X': 1.0      # normalized position
 }
@@ -38,9 +37,8 @@ def manual_workflow(
     DT_0: float,
     experimental_data: Optional[pd.DataFrame] = None,
     simulation_params: Dict = {
-        'T': 100000,  # total time [s]
-        'dt': 1.0,    # time step [s]
-        'dx': 0.01,   # spatial step [adim]
+        'T': 10e3,  # total time [s]
+        'dx': 0.002,   # spatial step [adim]
         'X': 1.0      # normalized position
     },
     output_settings: Dict[str, Any] = {
@@ -267,7 +265,7 @@ def data_fitting_workflow(
         diameter=model.params.transport.diameter,
         flowrate=model.params.transport.flowrate,
         temp_celsius=model.params.base.temperature,
-        truncate_at_stabilisation=False,
+        truncate_at_stabilisation=True,
     )
     
     # Create 'tau' column
@@ -297,8 +295,8 @@ def data_fitting_workflow(
         simulation_params={
             'T': processed_exp_data['time'].max(),
             'X': 1.0,
-            'dt': processed_exp_data['time'].max() / 10000, # 10000 points
-            'dx': 1.0 / 100,   # 100 points
+            'dt': 1,
+            'dx': 0.001,
             },
         output_settings=output_settings
     )

@@ -35,7 +35,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     Z = diffusivity_profile.values
     
     cf = ax.contourf(X, Y, Z, levels=20, cmap='viridis')
-    plt.colorbar(cf, ax=ax, label='Concentration / cm³(STP) cm⁻³')
+    plt.colorbar(cf, ax=ax, label='Diffusion Coefficient / cm² s⁻¹')
     
     ax.set_xlabel('Position / cm')
     ax.set_ylabel('Time / s')
@@ -53,7 +53,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     
     return fig, ax
 
-def plot_flux_over_time(flux_data: pd.DataFrame,
+def plot_norm_flux_over_time(flux_data: pd.DataFrame,
                        experimental_data: Optional[pd.DataFrame] = None,
                        ax: Optional[plt.Axes] = None,
                        save_path: Optional[str] = None,
@@ -167,6 +167,61 @@ def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
     
     return fig, ax
 
+def plot_norm_flux_over_time(flux_data: pd.DataFrame,
+                           experimental_data: Optional[pd.DataFrame] = None,
+                           ax: Optional[plt.Axes] = None,
+                           save_path: Optional[str] = None,
+                           display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot normalised flux evolution over time
+    
+    Parameters
+    ----------
+    flux_data : pd.DataFrame
+        Model flux data
+    experimental_data : pd.DataFrame, optional
+        Experimental flux data
+    ax : plt.Axes, optional
+        Matplotlib axes for plotting
+    save_path : str, optional
+        Path to save the figure
+    display : bool, optional
+        Whether to display the plot (default: True)
+    """
+    # Check if required columns are present
+    if 'time' not in flux_data.columns or 'normalised_flux' not in flux_data.columns:
+        raise ValueError("Missing required columns: 'time', 'normalised_flux'")
+    
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+    set_style()
+    
+    # Plot calculated flux
+    ax.plot(flux_data['time'], flux_data['normalised_flux'], 'b-', label='Model')
+    
+    # Plot experimental data if provided
+    if experimental_data is not None:
+        ax.plot(experimental_data['time'], experimental_data['normalised_flux'],
+                'ko', label='Experimental', alpha=0.5)
+    
+    ax.set_xlabel('Time / s')
+    ax.set_ylabel('Normalised Flux')
+    ax.set_title('Normalised Flux Evolution')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.tight_layout()
+        fig.savefig(save_path, dpi=1200, bbox_inches='tight')
+    
+    if display:
+        plt.tight_layout()
+        plt.show()
+    
+    return fig, ax
+
 def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
                                       L: float,
                                       T: float,
@@ -208,8 +263,8 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
                 label=f't = {t:.0f} s')
     
     ax.set_xlabel('Position / cm')
-    ax.set_ylabel('Concentration / cm³(STP) cm⁻³')
-    ax.set_title('Concentration-Location Profiles')
+    ax.set_ylabel('Diffusion Coefficient / cm² s⁻¹')
+    ax.set_title('Diffusivity-Location Profiles')
     ax.legend()
     ax.grid(True, alpha=0.3)
     

@@ -172,7 +172,10 @@ def preprocess_data(data: pd.DataFrame,
     df['cumulative_flux'] = calculate_cumulative_flux(df)
     
     # Noralised flux
-    df['normalised_flux'] = df['flux'] / df['flux'].rolling(window=10).max()
+    # Calculate 10-period rolling average and get its maximum value
+    rolling_avg_max = df['flux'].rolling(window=10, center=True).mean().max()
+    # Normalize flux by dividing by the maximum rolling average
+    df['normalised_flux'] = df['flux'] / rolling_avg_max
     
     # Add metadata
     df.attrs['thickness'] = thickness

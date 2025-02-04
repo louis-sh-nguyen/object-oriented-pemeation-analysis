@@ -1,4 +1,4 @@
-# Time-Lag Analysis for Gas Permeation
+# Gas Permeation Analysis
 
 A Python package for analyzing gas permeation data using the time-lag method.
 
@@ -128,8 +128,6 @@ parameters/
    - Complete parameter set for model initialization
    - Cascading validation of all parameters
 
-### Relationship Flow
-
 ## Usage Pattern
 1. Parameters (Dataclass)
    - Data storage
@@ -144,6 +142,64 @@ parameters/
    - fit_to_data()
    - calculate_diffusivity()
    - calculate_permeability()
+
+## Algorithm Description
+### Model: VariableDiffusivityFVT
+
+### Overview
+The solver implements an implicit Newton method with adaptive time stepping and a fallback strategy to robustly solve the PDE in the FVT model. The implementation consists of two major components:
+
+1. **Newton Method for Time-Stepping:**  
+   Iteratively updates the solution at each time step until the relative residual meets the specified tolerance.
+
+2. **Adaptive Time Stepping with Fallback:**  
+   Dynamically adjusts the time step based on convergence. If the Newton method fails to converge at a given dt, the time step is reduced. When dt becomes too small, the solver activates a fallback mode by fixing dt and increasing damping to secure convergence.
+
+### Newton Method Implementation
+- **Residual Calculation:**  
+  For each interior grid point, the residual is computed using the discretized PDE:
+  
+  \[
+  R_i = \frac{D_i^\text{new} - D_i^\text{old}}{dt} - K \, D_i^\text{new} \, \Delta_x D
+  \]
+  
+  where \(\Delta_x D\) is approximated by a central finite difference.
+
+- **Convergence Check:**  
+  The algorithm checks for convergence by comparing the relative \(L^2\) norm of the residual to a tolerance:
+  
+  \[
+  \frac{\|R\|_2}{\|D\|_2} < \text{rel_tol}
+  \]
+  
+  If the condition is met, the iteration stops.
+
+- **Relaxed Newton Update:**  
+  A diagonal approximation to the Jacobian is used to correct the solution:
+  
+  \[
+  D_i^\text{new} \leftarrow D_i^\text{new} - \text{relax} \cdot \frac{R_i}{J_{ii}}
+  \]
+  
+  The relaxation factor helps improve stability. Boundary conditions are enforced after each update.
+
+### Adaptive Time Stepping with Fallback
+- **Adaptive Strategy:**  
+  The solver begins with an initial time step (`dt_init`). If the Newton update is successful, dt is gradually increased (using a ramp-up factor) until it reaches a target value (`dt_target`).
+
+- **Handling Convergence Failures:**  
+  If the Newton iterations fail to converge:
+  - The time step is halved and the update is retried.
+  - When the time step falls below a minimum threshold (`dt_min`), the solver does not stop. Instead, it switches to a fallback mode:
+    - **Fallback Mode:**  
+      dt is fixed to `dt_min`, and the damping is increased (i.e., the relaxation factor is reduced) to help achieve convergence under challenging conditions.
+
+- **Recording the Solution:**  
+  The complete time-history is stored as two DataFrames:
+  - `Dprime_df`: diffusivity profile over space and time.
+  - `flux_df`: normalized flux data computed at each time step.
+
+This combination of Newton's method with adaptive time stepping and a fallback strategy ensures robust convergence even when the system exhibits stiff behavior or challenging convergence properties.
 
 ## License
 

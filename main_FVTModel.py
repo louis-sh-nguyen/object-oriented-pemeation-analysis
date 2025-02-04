@@ -12,7 +12,7 @@ from src.models.single_pressure.variable_diffusivity_fvt import (
 from src.models.single_pressure.variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
     plot_diffusivity_location_profile,
-    plot_flux_over_time,
+    plot_norm_flux_over_time,
     plot_norm_flux_over_tau
 )
 from src.models.single_pressure.variable_diffusivity_fvt.workflow import (
@@ -70,27 +70,15 @@ def test_pde_solving():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        D1_prime=2.38,
-        DT_0=2.87e-7
+        D1_prime=4.0,
+        DT_0=1.0e-7
     )
 
     sim_params = {
-        'T': 60000,  # total time [s]
-        'dt': 0.010,    # time step [s]
-        'dx': 0.01,   # spatial step [adim]
-        'X': 1.0      # normalized position
+        'T': 40e3,  # total time [s]
+        'X': 1.0,     # normalized position
+        'dx': 0.002,   # spatial step [adim]
     }
-    # Calculate maximum stable dt
-    # dx = 0.02  # Smaller spatial step
-    # D_max = model.params.transport.DT_0 * model.params.transport.D1_prime
-    # dt_max = dx**2 / (2 * D_max)
-    
-    # sim_params = {
-    #     'T': 60000,          # total time [s]
-    #     'dt': 10,  # time step with safety factor, lower better
-    #     'dx': dx,            # spatial step [adim], higher better
-    #     'X': 1.0             # normalised position
-    # }
     
     # Solve PDE
     Dprime_df, flux_df = model.solve_pde(simulation_params=sim_params)
@@ -100,33 +88,40 @@ def test_pde_solving():
     print(f"Spatial points: {len(Dprime_df.columns)}")
     
     # Plot results
-    fig, ((ax1, ax2, ax3)) = plt.subplots(1, 3, figsize=(16, 4))
+    # fig, ((ax1, ax2, ax3)) = plt.subplots(1, 3, figsize=(16, 4))
     
     # Plot diffusivity profile evolution
-    plot_diffusivity_profile(
-        diffusivity_profile=Dprime_df,
-        ax=ax1,
-        display=False
-    )
+    # plot_diffusivity_profile(
+    #     diffusivity_profile=Dprime_df,
+    #     ax=ax1,
+    #     display=False
+    # )
     
     # Plot diffusivity-location profiles
     plot_diffusivity_location_profile(
         diffusivity_profile=Dprime_df,
         L=model.params.transport.thickness,
         T=sim_params['T'],
-        ax=ax2,
-        display=False
+        # ax=ax2,
+        display=True
     )
     
     # Plot normalized flux evolution
     plot_norm_flux_over_tau(
         flux_data=flux_df,
-        ax=ax3,
-        display=False
+        # ax=ax3,
+        display=True
     )
     
-    plt.tight_layout()
-    plt.show()
+    # Plot flux evolution over time
+    plot_norm_flux_over_time(
+        flux_data=flux_df,
+        # ax=ax3,
+        display=True
+    )
+    
+    # plt.tight_layout()
+    # plt.show()
 
 def test_manual_workflow():
     """Test the FVT workflow"""
@@ -138,12 +133,11 @@ def test_manual_workflow():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        D1_prime=2.38,
+        D1_prime=2.0,
         DT_0=2.87e-7,
         simulation_params={
-            'T': 100000,  # total time [s]
-            'dt': 1.0,    # time step [s]
-            'dx': 0.01,   # spatial step [adim]
+            'T': 40e3,  # total time [s]
+            'dx': 0.002,   # spatial step [adim]
             'X': 1.0      # normalized position
         },
         output_settings={
@@ -160,9 +154,68 @@ def test_manual_workflow():
     print("\nWorkflow Results:")
     print(f"Time points: {len(flux_df)}")
     print(f"Spatial points: {len(Dprime_df.columns)}")
-    print(f"Max flux: {flux_df['flux'].max():.4e}")
-    print(f"Min flux: {flux_df['flux'].min():.4e}")
+    print(f"Max normalised flux: {flux_df['normalised_flux'].max():.4e}")
+    print(f"Min normalised flux: {flux_df['normalised_flux'].min():.4e}")
 
+def test_parameter_sensitivity():
+    """Test combined effect of D1_prime and DT_0 on normalized flux vs tau curve"""
+    
+    # Base simulation parameters
+    sim_params = {
+        'T': 1e4,  # total time [s]
+        'X': 1.0,      # normalized position
+        'dx': 0.005   # spatial step [adim]
+    }
+    
+    # Test different parameter combinations
+    DT_0s = [1e-7, 1e-6]  # Range of DT_0 values
+    D1_primes = [ 5.0, 50, ]  # Range of D1_prime values
+    
+    # Color map for D1_prime and line styles for DT_0
+    colors = ['b', 'g', 'r']
+    styles = [':', '--', '-']
+    
+    # Create figure
+    set_style()
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # Test all combinations
+    for i, D1_prime in enumerate(D1_primes):
+        for j, DT_0 in enumerate(DT_0s):
+            model = FVTModel.from_parameters(
+                pressure=50.0,
+                temperature=25.0,
+                thickness=0.1,
+                diameter=1.0,
+                flowrate=8.0,
+                D1_prime=D1_prime,
+                DT_0=DT_0
+            )
+            
+            _, flux_df = model.solve_pde(simulation_params=sim_params)
+            axs[0].plot(
+                flux_df['tau'], flux_df['normalised_flux'], 
+                color=colors[i], linestyle=styles[j],
+                label=f'D1_prime={D1_prime:.1f}, DT_0={DT_0:.1e}'
+            )
+            axs[1].plot(
+                flux_df['time'], flux_df['normalised_flux'],
+                color=colors[i], linestyle=styles[j],
+                label=f'D1_prime={D1_prime:.1f}, DT_0={DT_0:.1e}'
+            )
+    
+    axs[0].set_xlabel(r'$\tau$ (Dimensionless Time)')
+    axs[0].set_ylabel('Normalised Flux')
+    axs[0].set_title('Normalised Flux vs Tau')
+    
+    axs[1].set_xlabel('Time')
+    axs[1].set_ylabel('Normalised Flux')
+    axs[1].set_title('Normalised Flux vs Time')
+    axs[1].legend(loc='upper left', bbox_to_anchor=(1.05, 1.0), fontsize='x-small')
+    
+    plt.tight_layout()
+    plt.show()
+    
 def test_data_fitting_workflow():
     """Test the FVT data fitting workflow"""
     # Turn off warning messages
@@ -195,65 +248,9 @@ def test_data_fitting_workflow():
     print(f"DT_0: {fit_results['DT_0']:.4e}")
     print(f"RMSE: {fit_results['rmse']:.4e}")
 
-def test_parameter_sensitivity():
-    """Test combined effect of D1_prime and DT_0 on normalized flux vs tau curve"""
-    
-    # Base simulation parameters
-    sim_params = {
-        'T': 6e4,  # total time [s]
-        'X': 1.0,      # normalized position
-        'dt': 1,    # time step [s]
-        'dx': 0.005   # spatial step [adim]
-    }
-    
-    # Test different parameter combinations
-    D1_primes = [1.0, 2.0, 3.0]  # Range of D1_prime values
-    # D1_primes = [5.0]  # Range of D1_prime values
-    DT_0s = [1e-7, 3.e-7, 5e-7]  # Range of DT_0 values
-    
-    # Create figure
-    set_style()
-    plt.figure(figsize=(10, 6))
-    
-    # Color map for D1_prime and line styles for DT_0
-    colors = ['b', 'g', 'r']
-    styles = [':', '--', '-']
-    
-    # Test all combinations
-    for i, D1_prime in enumerate(D1_primes):
-        for j, DT_0 in enumerate(DT_0s):
-            model = FVTModel.from_parameters(
-                pressure=50.0,
-                temperature=25.0,
-                thickness=0.1,
-                diameter=1.0,
-                flowrate=8.0,
-                D1_prime=D1_prime,
-                DT_0=DT_0
-            )
-            
-            _, flux_df = model.solve_pde(simulation_params=sim_params)
-            plt.plot(flux_df['tau'], flux_df['normalised_flux'], 
-                    color=colors[i], linestyle=styles[j],
-                    label=f'D1_prime={D1_prime:.1f}, DT_0={DT_0:.1e}')
-    
-    plt.xlabel(r'$\tau$ (Dimensionless Time)')
-    plt.ylabel('Normalised Flux')
-    plt.title('Combined Effect of D1_prime and DT_0')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Print key observations
-    # print("\nParameter Sensitivity Analysis:")
-    # print("1. D1_prime (colors) affects: Initial rise rate and curve shape")
-    # print("2. DT_0 (line styles) affects: Time scaling and approach to steady state")
-
 if __name__ == '__main__':
     # test_model_creation()
-    test_pde_solving()
+    # test_pde_solving()
     # test_manual_workflow()
+    test_parameter_sensitivity()
     # test_data_fitting_workflow()
-    # test_parameter_sensitivity()
