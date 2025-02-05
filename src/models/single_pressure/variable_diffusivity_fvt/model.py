@@ -64,260 +64,6 @@ class FVTModel(PermeationModel):
         )
         
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
-    
-    # def _solve_pde(self, D1_prime: float, DT_0: float, T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    #     """Solve PDE with stability monitoring
-        
-    #     ∂D'/∂t = (DT_0/L²) * D' * (∂²D'/∂x²)
-        
-    #     Finite Difference Scheme
-    #     - Forward difference in time
-    #     - Central difference in space
-        
-    #     Discretization
-    #     ∂D'/∂t ≈ (D'[n+1,i] - D'[n,i])/dt
-    #     ∂²D'/∂x² ≈ (D'[n,i+1] - 2D'[n,i] + D'[n,i-1])/dx²
-
-    #     Stability Criterion
-    #     dt ≤ dx²/(2*DT_0*D1')
-                
-    #     Matrix form:
-    #     D'[n+1] = D'[n] + r * D'[n] * (AD'[n])
-    #     Where:
-    #     - r = dt*DT_0/L²
-    #     - A: Tridiagonal matrix for ∂²/∂x²
-        
-    #     Known undersirable behaviours:
-    #     - dx <= 0.01 -> unstable.
-    #     - d2D = laplacian.dot(D_prime[n-1, 1:-1]) -> causes internal points to drop to 0 at t > 0
-
-        
-    #     """
-    #     # Grid setup
-    #     Nx = int(X/dx) + 1
-    #     Nt = int(T/dt) + 1
-        
-    #     # Initialize arrays
-    #     x = np.linspace(0, X, Nx)
-    #     t = np.linspace(0, T, Nt)
-    #     D_prime = np.zeros((Nt, Nx))
-        
-    #     # Initialise
-    #     D_prime[0, :] = 1.0  # Example initial condition, modify as necessary
-        
-    #     # Boundary conditions
-    #     D_prime[:, 0] = D1_prime     # x=0
-    #     D_prime[:, -1] = D2_prime    # x=L
-        
-    #     # Pre-compute constants
-    #     r = dt * DT_0 / (L**2)
-        
-    #     # Esitmate second derivative operator (sparse matrix) ưith laplacian
-    #     Nx_interior = Nx - 2  # Number of interior points
-    #     diagonals = [np.ones(Nx_interior-1), -2*np.ones(Nx_interior), np.ones(Nx_interior-1)]
-    #     laplacian = sparse.diags(diagonals, offsets=[-1, 0, 1], shape=(Nx_interior, Nx_interior), format='csr') / dx**2
-    
-    #     # Time stepping with progress bar
-    #     # Progress bar
-    #     pbar = tqdm(
-    #         total=Nt-1,
-    #         desc=f"Solving PDE (D1'={D1_prime:.2f}, DT_0={DT_0:.2e})",
-    #         unit='steps',
-    #         ncols=100
-    #     )
-        
-    #     # Time stepping
-    #     for n in range(1, Nt):
-    #         # Internal-point stepping
-    #         for i in range(1, Nx-1):
-    #             d2D = (D_prime[n-1, i+1] - 2 * D_prime[n-1, i] + D_prime[n-1, i-1]) / dx**2     # stable
-    #             D_prime[n, i] = D_prime[n-1, i] + r * D_prime[n-1, i] * d2D
-            
-    #         pbar.update(1)
-        
-    #     pbar.close()
-        
-    #     # Calculate flux
-    #     F_norm = (-(D_prime[:, -1] - D_prime[:, -2]) / dx) / (-(D2_prime - D1_prime) / X)
-        
-    #     # Create output DataFrames
-    #     Dprime_df = pd.DataFrame(D_prime, columns=[f'x={x_i:.3f}' for x_i in x])
-    #     Dprime_df.index = t
-        
-    #     flux_df = pd.DataFrame({
-    #         'time': t,
-    #         'normalised_flux': F_norm,
-    #         'tau': DT_0 * t / L**2
-    #     })
-        
-    #     return Dprime_df, flux_df
-    
-    # def _solve_pde(self, D1_prime: float, DT_0: float, T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    #     """Solve PDE with implicit Euler scheme (backward Euler).
-
-    #     """
-    #     # Check D1_prime and D2_prime
-    #     if D1_prime <= 0 or D2_prime <= 0:
-    #         raise ValueError(f'D1_prime ({D1_prime}) and D2_prime ({D2_prime}) must be positive')
-    #     if D1_prime <= D2_prime:
-    #         raise ValueError(f'D1_prime ({D1_prime}) must be greater than D2_prime ({D2_prime})')
-        
-    #     # Grid setup
-    #     Nx = int(X/dx) + 1
-    #     Nt = int(T/dt) + 1
-        
-    #     # Initialize arrays
-    #     x = np.linspace(0, X, Nx)
-    #     t = np.linspace(0, T, Nt)
-        
-    #     # Initial condition
-    #     D_prime = np.ones((Nt, Nx))  # Initial condition
-        
-    #     # Boundary conditions
-    #     D_prime[:, 0] = D1_prime     # x=0
-    #     D_prime[:, -1] = D2_prime    # x=L
-        
-    #     # Pre-compute constants
-    #     r = (DT_0 / L**2) * (dt / dx**2)
-        
-    #     # Construct tridiagonal matrix A for interior points (size Nx-2)
-    #     diagonals = [
-    #         -r * np.ones(Nx - 3),  # Lower diagonal
-    #         (1 + 2 * r) * np.ones(Nx - 2),  # Main diagonal
-    #         -r * np.ones(Nx - 3)   # Upper diagonal
-    #     ]
-    #     A = sp.diags(diagonals, offsets=[-1, 0, 1], format="csr")
-    
-    #     # Store flux values
-    #     F_norm = np.zeros(Nt)
-        
-    #     # Time stepping with progress bar
-    #     # Progress bar
-    #     pbar = tqdm(
-    #         total=Nt-1,
-    #         desc=f"Solving PDE (D1'={D1_prime:.2f}, DT_0={DT_0:.2e})",
-    #         unit='steps',
-    #         ncols=100
-    #     )
-        
-    #     # Time stepping
-    #     for n in range(1, Nt):
-    #         # Right-hand side (RHS)
-    #         rhs = D_prime[n-1, 1:-1].copy()  # Only interior points
-            
-    #         # Apply boundary conditions explicitly to RHS
-    #         rhs[0] += r * D_prime[n, 0]    # Left boundary
-    #         rhs[-1] += r * D_prime[n, -1]  # Right boundary
-
-    #         # Solve linear system for interior points
-    #         D_prime[n, 1:-1] = spla.spsolve(A, rhs)
-
-    #         # Calculate flux at right boundary
-    #         F_norm[n] = (-(D_prime[n, -1] - D_prime[n, -2]) / dx) / (-(D_prime[n, -1] - D_prime[n, 0]) / X)
-            
-    #         pbar.update(1)
-        
-    #     pbar.close()
-        
-    #     # Create output DataFrames
-    #     Dprime_df = pd.DataFrame(D_prime, columns=[f"x={x_i:.3f}" for x_i in x])
-    #     Dprime_df.index = t
-        
-    #     flux_df = pd.DataFrame({
-    #         'time': t,
-    #         'normalised_flux': F_norm,
-    #         'tau': DT_0 * t / L**2
-    #     })
-        
-    #     return Dprime_df, flux_df
-
-    # def _solve_pde(self, D1_prime: float, DT_0: float, T: float, X: float, L: float, dt: float, dx: float, U_VprimeW: float = None, D2_prime: float = 1.0) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    #     """Solve PDE with Crank-Nicholson (implicit).
-
-    #     """
-    #     # Check D1_prime and D2_prime
-    #     if D1_prime <= 0 or D2_prime <= 0:
-    #         raise ValueError(f'D1_prime ({D1_prime}) and D2_prime ({D2_prime}) must be positive')
-    #     if D1_prime <= D2_prime:
-    #         raise ValueError(f'D1_prime ({D1_prime}) must be greater than D2_prime ({D2_prime})')
-        
-    #     # Grid setup
-    #     Nx = int(X/dx) + 1
-    #     Nt = int(T/dt) + 1
-        
-    #     # Initialize arrays
-    #     x = np.linspace(0, X, Nx)
-    #     t = np.linspace(0, T, Nt)
-        
-    #     # Initial condition
-    #     D_prime = np.ones((Nt, Nx))  # Initial condition
-        
-    #     # Boundary conditions
-    #     D_prime[:, 0] = D1_prime     # x=0
-    #     D_prime[:, -1] = D2_prime    # x=L
-        
-    #     # Pre-compute constants
-    #     r = (DT_0 / L**2) * (dt / dx**2)
-        
-    #     # Construct tridiagonal matrix A for interior points (size Nx-2)
-    #     diagonals = [
-    #         -r * np.ones(Nx - 3),  # Lower diagonal
-    #         (1 + 2 * r) * np.ones(Nx - 2),  # Main diagonal
-    #         -r * np.ones(Nx - 3)   # Upper diagonal
-    #     ]
-    #     A = sp.diags(diagonals, offsets=[-1, 0, 1], format="csr")
-    
-    #     # Store flux values
-    #     F_norm = np.zeros(Nt)
-        
-    #     # Time stepping with progress bar
-    #     # Progress bar
-    #     pbar = tqdm(
-    #         total=Nt-1,
-    #         desc=f"Solving PDE (D1'={D1_prime:.2f}, DT_0={DT_0:.2e})",
-    #         unit='steps',
-    #         ncols=100
-    #     )
-    #     try:
-    #         for n in range(1, Nt):
-    #             # Update interior points using implicit Euler method
-    #             b = D_prime[n-1, 1:-1].copy()
-                
-    #             # Apply boundary conditions explicitly to RHS
-    #             b[0] += r * D_prime[n, 0]    # Left boundary
-    #             b[-1] += r * D_prime[n, -1]  # Right boundary
-                
-    #             D_new = spsolve(A, b)
-                
-    #             # Check for instabilities
-    #             if not np.all(np.isfinite(D_new)):
-    #                 raise ValueError(f"Solution became unstable at t={t[n]:.2e}")
-                
-    #             D_prime[n, 1:-1] = D_new
-    #             pbar.update(1)
-                
-    #             if n % 100 == 0:
-    #                 pbar.set_postfix({
-    #                     'tau': f"{DT_0 * t[n] / L**2:.2e}",
-    #                     'max_D': f"{np.max(D_new):.2e}"
-    #                 })
-        
-    #     except Exception as e:
-    #         pbar.close()
-    #         raise e
-    #     pbar.close()
-        
-    #     # Create output DataFrames
-    #     Dprime_df = pd.DataFrame(D_prime, columns=[f"x={x_i:.3f}" for x_i in x])
-    #     Dprime_df.index = t
-        
-    #     flux_df = pd.DataFrame({
-    #         'time': t,
-    #         'normalised_flux': F_norm,
-    #         'tau': DT_0 * t / L**2
-    #     })
-        
-    #     return Dprime_df, flux_df
 
     @staticmethod
     @nb.njit
@@ -364,7 +110,8 @@ class FVTModel(PermeationModel):
 
     def _solve_pde(self, D1_prime, DT_0, T, X, L, dx, 
                   D2_prime=1.0, rel_tol=1e-8, max_iter=100, relax=0.8,
-                  dt_init=0.0005, dt_target=10, dt_min=1e-6, dt_ramp_factor=1.1):
+                  dt_init=0.0005, dt_target=10, dt_min=1e-6, dt_ramp_factor=1.1,
+                  show_progress=True):
         """
         Adaptive implicit PDE solver using Newton's method with adaptive dt.
         Instead of stopping the simulation when dt becomes too small,
@@ -385,7 +132,8 @@ class FVTModel(PermeationModel):
         current_t = 0.0
         dt = dt_init
 
-        pbar = tqdm(total=T, desc=f"Adaptive PDE Solve (D1'={D1_prime}, DTO={DT_0})", ncols=100)
+        if show_progress:
+            pbar = tqdm(total=T, desc=f"Adaptive PDE Solve (D1'={D1_prime}, DTO={DT_0})", ncols=100)
         while current_t < T:
             accepted = False
             trial_dt = dt
@@ -413,8 +161,10 @@ class FVTModel(PermeationModel):
             current_t += dt
             t_history.append(current_t)
             D_history.append(D_new.copy())
-            pbar.update(dt) # increments the progress by an amount dt
-        pbar.close()
+            if show_progress:
+                pbar.update(dt) # increments the progress by an amount dt
+        if show_progress:
+            pbar.close()
 
         D_arr = np.array(D_history)
         t_arr = np.array(t_history)
@@ -466,93 +216,194 @@ class FVTModel(PermeationModel):
             dx=simulation_params['dx']
         )
     
-    def fit_to_data(self, data: pd.DataFrame, 
-                    track_progress: bool = False) -> Dict[str, float]:
+    def _process_fitting_settings(self, mode: str, fitting_settings: Optional[dict]) -> tuple:
         """
-        Fit model parameters to experimental data
+        Process the fitting_settings argument and return a tuple
+        (initial_guess, bounds, n_starts) to be passed to the helper functions.
+        
+        For mode "d1":
+        - initial_guess: float (default: self.params.transport.D1_prime or 5.0)
+        - bounds: tuple of two numbers (default: (1.01, 100))
+        For mode "both":
+        - initial_guess: tuple (default: (self.params.transport.D1_prime, self.params.transport.DT_0) or (5.0, 1e-6))
+        - bounds: tuple of tuples (default: ((1.01, 100), (1e-8, 1e-5)))
+        n_starts is an integer with default value 1.
+        """
+        n_starts = 1
+        if fitting_settings:
+            n_starts = fitting_settings.get("n_starts", 1)
+        if mode == "both":
+            default_init = (self.params.transport.D1_prime, self.params.transport.DT_0) if hasattr(self, "params") else (5.0, 1e-6)
+            initial_guess = fitting_settings.get("initial_guess", default_init) if fitting_settings else default_init
+            default_bounds = ((1.01, 100), (1e-8, 1e-5))
+            bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
+        else:  # mode == "d1"
+            default_init = self.params.transport.D1_prime if hasattr(self, "params") else 5.0
+            initial_guess = fitting_settings.get("initial_guess", default_init) if fitting_settings else default_init
+            default_bounds = (1.01, 100)
+            bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
+        return initial_guess, bounds, n_starts
+
+    def fit_to_data(self, data: pd.DataFrame, track_progress: bool = False,
+                    fitting_settings: Optional[dict] = None) -> dict:
+        """
+        Fit model parameters to experimental data.
         
         Parameters
         ----------
         data : pd.DataFrame
-            Experimental flux data with 'time' and 'flux' columns
-        simulation_params : dict, optional
-            Simulation parameters for PDE solving
+            Experimental data (with appropriate columns depending on mode).
         track_progress : bool, optional
-            Whether to display optimization progress (default: False)
-            
+            Whether to track optimisation progress.
+        fitting_settings : dict, optional
+            Settings dictionary that may include:
+            - mode: "d1" (fit only D1_prime) or "both" (fit both D1_prime and DT_0).
+            - initial_guess: float (if mode "d1") or tuple (if mode "both")
+            - bounds: tuple (if mode "d1") or tuple of tuples (if mode "both")
+            - n_starts: number of multi-starts (default 1)
+        
         Returns
         -------
-        Dict[str, float]
-            Fitted parameters (D1_prime, DT_0) and optimization results
+        dict
+            Dictionary containing fitted parameters and RMSE.
         """
-        # Check for required columns
-        required_cols = ['tau', 'normalised_flux']
-        missing_cols = [col for col in required_cols if col not in data.columns]
-        if missing_cols:
-            raise ValueError(f"Data is missing required columns: {missing_cols}")
-
-        # Setup optimization tracking if requested
-        if track_progress:
-            callback = OptimisationCallback(
-                param_names=['D1_prime', 'DT_0'],
-            )
+        # Determine mode (default to "d1")
+        mode = fitting_settings.get("mode", "D1") if fitting_settings else "d1"
+        # Process fitting settings into initial_guess, bounds, and n_starts.
+        initial_guess, bounds, n_starts = self._process_fitting_settings(mode, fitting_settings)
+        
+        if mode == "both":
+            # Check required columns for fitting both parameters.
+            required_cols = ['time', 'tau', 'normalised_flux']
+            missing_cols = [col for col in required_cols if col not in data.columns]
+            if missing_cols:
+                raise ValueError(f"Data is missing required columns: {missing_cols}")
+            return self._fit_D1prime_DT0(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
+                                         track_progress=track_progress)
         else:
-            callback = None
-            
-        # Store last objective value for callback
+            # Default mode: fit only D1_prime.
+            required_cols = ['tau', 'normalised_flux']
+            missing_cols = [col for col in required_cols if col not in data.columns]
+            if missing_cols:
+                raise ValueError(f"Data is missing required columns: {missing_cols}")
+            return self._fit_D1_prime(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
+                                      track_progress=track_progress)
+
+    def _fit_D1_prime(self, data: pd.DataFrame, initial_guess=5.0, bounds=(1.01, 100), n_starts=1,
+                      track_progress: bool = True) -> dict:
+        """
+        Helper function to optimize only D1_prime.
+        
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Experimental data.
+        initial_guess : float
+            Initial guess for D1_prime.
+        bounds : tuple
+            Bounds for D1_prime.
+        n_starts : int
+            Number of multi-start optimisations.
+        track_progress : bool
+            Whether to track optimisation progress.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing fitted D1_prime and RMSE.
+        """
+            # Validate that n_starts is an integer greater than or equal to 1
+        if not isinstance(n_starts, int) or n_starts < 1:
+            raise ValueError("n_starts must be an integer greater than or equal to 1")
+        
+        best_result = None
+        best_fun = np.inf
+        best_rmse = np.inf
+
+        # Create callback only if tracking progress.
+        callback_instance = OptimisationCallback(param_names=["D1_prime"]) if track_progress else None
         last_rmse = [float('inf')]
         
         def objective(params):
-            D1_prime, DT_0 = params
+            D1_prime = params
+            # Assuming 'model' is accessible from the current context
             _, flux_df = self._solve_pde(
                 L=self.params.transport.thickness,
                 D1_prime=D1_prime,
-                DT_0=DT_0,
+                DT_0=self.params.transport.DT_0,
                 T=data['time'].max(),
                 X=1.0,
-                dt=1,
-                dx=0.02,   # 100 points
+                dx=0.005,
+                show_progress=False
             )
-            
-            # Interpolate model norm flux to data time points
+            # Interpolate model normalized flux to data tau points
             model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
-            
-            # Calculate RMSE
-            rmse = np.sqrt(np.mean((data['normalised_flux'] - model_norm_flux)**2))
+            rmse = np.sqrt(np.mean((data['normalised_flux'] - model_norm_flux) ** 2))
             last_rmse[0] = rmse
-            
             return rmse
+
+        def local_callback(xk):
+            if callback_instance is not None:
+                callback_instance(xk, last_rmse[0])
         
-        def minimize_callback(xk):
-            if callback is not None:
-                callback(xk, last_rmse[0])
+        bounds_list = [bounds]
+        for i in range(n_starts):
+            if i == 0:
+                x0 = [initial_guess]
+            else:
+                low, high = bounds
+                candidate = np.random.uniform(low, high)
+                x0 = [candidate]
+            result = minimize(
+                lambda x: objective(x[0]),
+                x0=x0,
+                method='L-BFGS-B',
+                bounds=bounds_list,
+                callback=local_callback
+            )
+            if result.fun < best_fun:
+                best_fun = result.fun
+                best_result = result
+                best_rmse = result.fun
         
-        # Initial guess from current parameters
-        x0 = [self.params.transport.D1_prime, self.params.transport.DT_0]
-        bounds = [(0.1, 100), (1e-10, 1e-4)] # [(D1_min, D1_max), (DT0_min, DT0_max)]
-        
-        # Optimize with callback
-        result = minimize(
-            objective, 
-            x0, 
-            # method='Nelder-Mead',
-            method='L-BFGS-B',
-            bounds=bounds,
-            callback=minimize_callback if callback is not None else None
-        )
-        
-        # Update model parameters
-        self.params.transport.D1_prime = result.x[0]
-        self.params.transport.DT_0 = result.x[1]
-        
-        fit_results = {
-            'D1_prime': result.x[0],
-            'DT_0': result.x[1],
-            'rmse': result.fun
+        if callback_instance is not None:
+            callback_instance.close()
+
+        best_params = {
+            'D1_prime': best_result.x[0],
+            'rmse': best_rmse,
+            'optimisation_result': best_result,
+            'optimisation_history': callback_instance.history if callback_instance is not None else []
         }
+        print(f"Best optimization result: {best_result}")
         
-        # Add optimization history if tracked
-        if track_progress and callback is not None:
-            fit_results['optimization_history'] = callback.history
+        return best_params
+
+
+    def _fit_D1prime_DT0(self, data: pd.DataFrame, initial_guess=(5.0, 1e-6),
+                          bounds=((1.01, 100), (1e-8, 1e-5)), n_starts=1,
+                          track_progress: bool = False) -> dict:
+        """
+        Helper function to optimize both D1_prime and DT_0.
         
-        return fit_results
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Experimental data.
+        initial_guess : tuple
+            Initial guess for (D1_prime, DT_0).
+        bounds : tuple of tuples
+            Bounds for (D1_prime, DT_0).
+        n_starts : int
+            Number of multi-start optimisations.
+        track_progress : bool
+            Whether to track optimisation progress.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing fitted D1_prime, DT_0 and RMSE.
+        """
+        # [Implementation for multi-start optimisation for both parameters]
+        # ... (Your existing code using initial_guess, bounds, and n_starts)
+        pass  # Replace with your actual implementation

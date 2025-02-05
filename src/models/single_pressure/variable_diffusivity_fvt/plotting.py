@@ -141,18 +141,18 @@ def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
         fig = ax.figure
     set_style()
     
-    # Plot calculated flux
-    ax.plot(flux_data['tau'], flux_data['normalised_flux'], 'b-', label='Model')
-    
     # Plot experimental data if provided
     if experimental_data is not None:
         ax.plot(experimental_data['tau'], experimental_data['normalised_flux'],
-                'ko', label='Experimental', alpha=0.5)
+            '.', color='grey', markerfacecolor='none', label='Experimental', alpha=0.5)
+        
+    # Plot calculated flux
+    ax.plot(flux_data['tau'], flux_data['normalised_flux'], 'r-', label='Model')
     
     ax.set_xlabel(r'$\tau$')
     ax.set_ylabel('Normalised Flux')
     ax.set_title('Flux Evolution')
-    ax.legend()
+    ax.legend(loc='best')
     ax.grid(True, alpha=0.3)
     
     if save_path:

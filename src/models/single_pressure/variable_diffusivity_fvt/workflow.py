@@ -9,6 +9,7 @@ from ..variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
     plot_diffusivity_location_profile,
     plot_norm_flux_over_tau,
+    plot_norm_flux_over_time
 )
 
 # Default settings dictionaries
@@ -25,6 +26,14 @@ DEFAULT_OUTPUT_SETTINGS = {
     'save_data': True,
     'plot_format': 'png',
     'data_format': 'csv'
+}
+
+# New default fitting settings constant
+DEFAULT_FITTING_SETTINGS = {
+    'mode': 'd1',         # 'd1' or 'both'
+    'initial_guess': 5.0,   # 5.0 or (5.0, 1e-7) when mode is 'both'
+    'bounds': (1.001, 20),  # or ((1.001, 20), (1e-7, 1e-5))
+    'n_starts': 1
 }
 
 def manual_workflow(
@@ -123,7 +132,8 @@ def manual_workflow(
     figures = {}
     
     # Create figure with subplots
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+    # fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5)) 1x3 plot
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))    # 2x2 plot
     
     # Plot concentration profile evolution
     plot_diffusivity_profile(
@@ -146,6 +156,13 @@ def manual_workflow(
         flux_data=flux_df,
         experimental_data=experimental_data,
         ax=ax3,
+        display=False
+    )
+    
+    plot_norm_flux_over_time(
+        flux_data=flux_df,
+        experimental_data=experimental_data,
+        ax=ax4,
         display=False
     )
     
@@ -192,10 +209,8 @@ def data_fitting_workflow(
     thickness: float,
     diameter: float,
     flowrate: float,
-    initial_guess: Dict[str, float] = {
-        'D1_prime': 2.38,
-        'DT_0': 2.87e-7
-    },
+    DT_0: float,
+    fitting_settings: Optional[dict] = None,  # New fitting_settings argument
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -225,7 +240,6 @@ def data_fitting_workflow(
     initial_guess : dict, optional
         Initial guess for fitting parameters:
         - D1_prime: normalized diffusivity at x=0
-        - DT_0: temperature-dependent diffusivity
     output_settings : dict, optional
         Dictionary containing output settings:
         - output_dir: Directory to save outputs (default: None)
@@ -251,8 +265,8 @@ def data_fitting_workflow(
         thickness=thickness,
         diameter=diameter,
         flowrate=flowrate,
-        D1_prime=initial_guess['D1_prime'],
-        DT_0=initial_guess['DT_0']
+        DT_0=DT_0,
+        D1_prime=5.0,   # placeholder value
     )
     
     # Load experimental data
@@ -265,6 +279,7 @@ def data_fitting_workflow(
         diameter=model.params.transport.diameter,
         flowrate=model.params.transport.flowrate,
         temp_celsius=model.params.base.temperature,
+        stabilisation_threshold=0.002,
         truncate_at_stabilisation=True,
     )
     
@@ -276,11 +291,19 @@ def data_fitting_workflow(
         n = len(processed_exp_data) // 1000
         processed_exp_data = processed_exp_data.iloc[::n].reset_index(drop=True)
         
+    # Merge default fitting settings using DEFAULT_FITTING_SETTINGS
+    final_fitting_settings = {**DEFAULT_FITTING_SETTINGS, **(fitting_settings or {})}
+    
     # Fit model to data with tracking
     fit_results = model.fit_to_data(
         data=processed_exp_data,
+        fitting_settings=final_fitting_settings,
         track_progress=True
     )
+    
+    print("Fitting completed. Fitting Results:")
+    for key, value in fit_results.items():
+        print(f"{key}: {value}")
     
     # Run simulation with fitted parameters
     model, Dprime_df, flux_df, figures = manual_workflow(
@@ -289,14 +312,13 @@ def data_fitting_workflow(
         thickness=thickness,
         diameter=diameter,
         flowrate=flowrate,
+        DT_0=DT_0,
         D1_prime=fit_results['D1_prime'],
-        DT_0=fit_results['DT_0'],
         experimental_data=processed_exp_data,
         simulation_params={
             'T': processed_exp_data['time'].max(),
             'X': 1.0,
-            'dt': 1,
-            'dx': 0.001,
+            'dx': 0.005,
             },
         output_settings=output_settings
     )

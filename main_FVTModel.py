@@ -228,15 +228,18 @@ def test_data_fitting_workflow():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        initial_guess={
-            'D1_prime': 2.38,
-            'DT_0': 2.87e-7
-        },
+        DT_0=2.87e-7,
+        fitting_settings={
+            'mode': 'D1',   # 'd1' or 'both'
+            'initial_guess': 5.0,   # 5.0 or (5.0, 1e-7)
+            'bounds': (1.001, 20),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
+            'n_starts': 1
+        },     
         output_settings={
             'output_dir': 'outputs/fitting',
             'display_plots': True,
-            'save_plots': True,
-            'save_data': True,
+            'save_plots': False,
+            'save_data': False,
             'plot_format': 'png',
             'data_format': 'csv'
         }
@@ -245,12 +248,11 @@ def test_data_fitting_workflow():
     # Print fitting results
     print("\nFitting Results:")
     print(f"D1_prime: {fit_results['D1_prime']:.4e}")
-    print(f"DT_0: {fit_results['DT_0']:.4e}")
     print(f"RMSE: {fit_results['rmse']:.4e}")
 
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
-    # test_manual_workflow()
-    test_parameter_sensitivity()
+    test_manual_workflow()
+    # test_parameter_sensitivity()
     # test_data_fitting_workflow()

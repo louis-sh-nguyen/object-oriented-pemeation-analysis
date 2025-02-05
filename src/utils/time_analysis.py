@@ -8,7 +8,7 @@ def find_stabilisation_time(
     flux_col: str = 'flux',
     time_col: str = 'time',
     window: int = 100,
-    threshold: float = 0.01
+    threshold: float = 0.002
 ) -> float:
     """Find time when flux stabilizes using moving average analysis."""
     if len(data) < window:

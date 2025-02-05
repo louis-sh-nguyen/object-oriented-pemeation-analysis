@@ -124,7 +124,8 @@ def preprocess_data(data: pd.DataFrame,
                    diameter: float,
                    flowrate: float,
                    temp_celsius: float,
-                   truncate_at_stabilisation: bool = False) -> pd.DataFrame:
+                   truncate_at_stabilisation: bool = False,
+                   stabilisation_threshold: float = None) -> pd.DataFrame:
     """
     Preprocess experimental permeation data for analysis
     
@@ -144,6 +145,8 @@ def preprocess_data(data: pd.DataFrame,
     truncate_at_stabilisation : bool, optional
         Whether to truncate data at stabilisation time (default: False)
         If True, adds 'stabilisation_time' to DataFrame.attrs
+    threshold : float, optional
+        Threshold value for stabilisation time (default: None)
     
     Returns
     -------
@@ -185,7 +188,7 @@ def preprocess_data(data: pd.DataFrame,
     
     # Find stabilisation time and truncate if requested
     if truncate_at_stabilisation:
-        stab_time = find_stabilisation_time(df, threshold=0.005)
+        stab_time = find_stabilisation_time(df, threshold=stabilisation_threshold)
         df = df[df['time'] <= stab_time].copy()
         
         # Add stabilisation time to metadata

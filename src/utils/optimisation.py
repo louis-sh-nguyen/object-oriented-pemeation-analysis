@@ -7,7 +7,7 @@ class OptimisationCallback:
     def __init__(self, param_names: List[str]):
         self.param_names = param_names
         self.history: List[Dict[str, Any]] = []
-        self.pbar = tqdm(desc="Fitting", unit="iter")
+        self.pbar = tqdm(desc="Fitting (multi-start)", unit="iter")
         
     def __call__(self, xk: np.ndarray, rmse: float) -> None:
         """
@@ -20,6 +20,9 @@ class OptimisationCallback:
         rmse : float
             Current RMSE value
         """
+        if not hasattr(xk, '__iter__'):
+            xk = [xk]
+        
         # Create iteration data dictionary
         iteration_data = {
             'iteration': len(self.history),  # Current iteration number
