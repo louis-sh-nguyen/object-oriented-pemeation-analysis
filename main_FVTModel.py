@@ -128,6 +128,7 @@ def test_manual_workflow():
     
     # Run workflow
     model, Dprime_df, flux_df, figures = manual_workflow(
+        # data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
         pressure=50.0,
         temperature=25.0,
         thickness=0.1,
@@ -206,12 +207,12 @@ def test_parameter_sensitivity():
     
     axs[0].set_xlabel(r'$\tau$ (Dimensionless Time)')
     axs[0].set_ylabel('Normalised Flux')
-    axs[0].set_title('Normalised Flux vs Tau')
+    axs[0].set_title(r'Normalised Flux vs $\tau$')
     
     axs[1].set_xlabel('Time')
     axs[1].set_ylabel('Normalised Flux')
     axs[1].set_title('Normalised Flux vs Time')
-    axs[1].legend(loc='upper left', bbox_to_anchor=(1.05, 1.0), fontsize='x-small')
+    axs[1].legend(loc='upper left', bbox_to_anchor=(1.05, 1.0), fontsize='small')
     
     plt.tight_layout()
     plt.show()
@@ -228,12 +229,13 @@ def test_data_fitting_workflow():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        DT_0=2.87e-7,
+        DT_0=2.8e-7,
+        D1_prime=5.0,
         fitting_settings={
-            'mode': 'D1',   # 'd1' or 'both'
-            'initial_guess': 5.0,   # 5.0 or (5.0, 1e-7)
+            'mode': 'D1',   # 'D1' or 'both'
+            'initial_guess': 2.0,   # 5.0 or (5.0, 1e-7)
             'bounds': (1.001, 20),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
-            'n_starts': 1
+            'n_starts': 1,  # 1, 2, 3 ,...
         },     
         output_settings={
             'output_dir': 'outputs/fitting',
@@ -253,6 +255,6 @@ def test_data_fitting_workflow():
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
-    test_manual_workflow()
+    # test_manual_workflow()
     # test_parameter_sensitivity()
-    # test_data_fitting_workflow()
+    test_data_fitting_workflow()

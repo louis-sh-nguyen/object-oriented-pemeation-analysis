@@ -12,6 +12,7 @@ from ...base_parameters import BaseParameters
 from ....utils.data_processing import preprocess_data
 from .parameters import FVTModelParameters, FVTTransportParams
 from ....utils.optimisation import OptimisationCallback
+import time
 
 class FVTModel(PermeationModel):
     """Variable diffusivity model based on Free Volume Theory (FVT)."""
@@ -79,7 +80,7 @@ class FVTModel(PermeationModel):
         for it in range(max_iter):
             R = np.empty(Nx - 2, dtype=np.float64)
             for i in range(1, Nx - 1):
-                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2
+                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 # Laplacian for second-derivative
                 R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl
 
             sumR = 0.0
@@ -98,11 +99,13 @@ class FVTModel(PermeationModel):
                 break
 
             for i in range(1, Nx - 1):
-                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2
-                J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)
+                # Laplacian for second-derivative
+                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 
+                #  Diagonal of Jacobian, by taking the partial derivative of the residual R[i] with respect to D[i]
+                J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)  # The -2.0 factor comes from differentiating the centered second‐difference approximation (i.e., D[i+1] - 2.0*D[i] + D[i-1]) with respect to D[i].
                 if J_diag == 0.0:
-                    J_diag = 1e-8
-                D_new[i] = D_new[i] - relax * (((D_new[i] - D_old[i]) / dt) - K * D_new[i] * lapl) / J_diag
+                    J_diag = 1e-8   # Avoid division by zero
+                D_new[i] = D_new[i] - relax * (((D_new[i] - D_old[i]) / dt) - K * D_new[i] * lapl) / J_diag # implicit update
 
             D_new[0] = D1_prime
             D_new[Nx - 1] = D2_prime
@@ -111,7 +114,7 @@ class FVTModel(PermeationModel):
     def _solve_pde(self, D1_prime, DT_0, T, X, L, dx, 
                   D2_prime=1.0, rel_tol=1e-8, max_iter=100, relax=0.8,
                   dt_init=0.0005, dt_target=10, dt_min=1e-6, dt_ramp_factor=1.1,
-                  show_progress=True):
+                  track_solving_progress=True):
         """
         Adaptive implicit PDE solver using Newton's method with adaptive dt.
         Instead of stopping the simulation when dt becomes too small,
@@ -132,7 +135,7 @@ class FVTModel(PermeationModel):
         current_t = 0.0
         dt = dt_init
 
-        if show_progress:
+        if track_solving_progress:
             pbar = tqdm(total=T, desc=f"Adaptive PDE Solve (D1'={D1_prime}, DTO={DT_0})", ncols=100)
         while current_t < T:
             accepted = False
@@ -161,9 +164,9 @@ class FVTModel(PermeationModel):
             current_t += dt
             t_history.append(current_t)
             D_history.append(D_new.copy())
-            if show_progress:
+            if track_solving_progress:
                 pbar.update(dt) # increments the progress by an amount dt
-        if show_progress:
+        if track_solving_progress:
             pbar.close()
 
         D_arr = np.array(D_history)
@@ -244,7 +247,7 @@ class FVTModel(PermeationModel):
             bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
         return initial_guess, bounds, n_starts
 
-    def fit_to_data(self, data: pd.DataFrame, track_progress: bool = False,
+    def fit_to_data(self, data: pd.DataFrame, track_fitting_progress: bool = False,
                     fitting_settings: Optional[dict] = None) -> dict:
         """
         Fit model parameters to experimental data.
@@ -253,7 +256,7 @@ class FVTModel(PermeationModel):
         ----------
         data : pd.DataFrame
             Experimental data (with appropriate columns depending on mode).
-        track_progress : bool, optional
+        track_fitting_progress : bool, optional
             Whether to track optimisation progress.
         fitting_settings : dict, optional
             Settings dictionary that may include:
@@ -267,8 +270,8 @@ class FVTModel(PermeationModel):
         dict
             Dictionary containing fitted parameters and RMSE.
         """
-        # Determine mode (default to "d1")
-        mode = fitting_settings.get("mode", "D1") if fitting_settings else "d1"
+        # Determine mode (default to "D1")
+        mode = fitting_settings.get("mode", "D1") if fitting_settings else "D1"
         # Process fitting settings into initial_guess, bounds, and n_starts.
         initial_guess, bounds, n_starts = self._process_fitting_settings(mode, fitting_settings)
         
@@ -279,7 +282,7 @@ class FVTModel(PermeationModel):
             if missing_cols:
                 raise ValueError(f"Data is missing required columns: {missing_cols}")
             return self._fit_D1prime_DT0(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
-                                         track_progress=track_progress)
+                                         track_fitting_progress=track_fitting_progress)
         else:
             # Default mode: fit only D1_prime.
             required_cols = ['tau', 'normalised_flux']
@@ -287,10 +290,10 @@ class FVTModel(PermeationModel):
             if missing_cols:
                 raise ValueError(f"Data is missing required columns: {missing_cols}")
             return self._fit_D1_prime(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
-                                      track_progress=track_progress)
+                                      track_fitting_progress=track_fitting_progress)
 
     def _fit_D1_prime(self, data: pd.DataFrame, initial_guess=5.0, bounds=(1.01, 100), n_starts=1,
-                      track_progress: bool = True) -> dict:
+                      track_fitting_progress: bool = True) -> dict:
         """
         Helper function to optimize only D1_prime.
         
@@ -321,12 +324,12 @@ class FVTModel(PermeationModel):
         best_rmse = np.inf
 
         # Create callback only if tracking progress.
-        callback_instance = OptimisationCallback(param_names=["D1_prime"]) if track_progress else None
+        callback_instance = OptimisationCallback(param_names=["D1_prime"]) if track_fitting_progress else None
         last_rmse = [float('inf')]
         
         def objective(params):
             D1_prime = params
-            # Assuming 'model' is accessible from the current context
+            # Calculate flux using the current D1_prime
             _, flux_df = self._solve_pde(
                 L=self.params.transport.thickness,
                 D1_prime=D1_prime,
@@ -334,7 +337,7 @@ class FVTModel(PermeationModel):
                 T=data['time'].max(),
                 X=1.0,
                 dx=0.005,
-                show_progress=False
+                track_solving_progress=False
             )
             # Interpolate model normalized flux to data tau points
             model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
@@ -342,18 +345,25 @@ class FVTModel(PermeationModel):
             last_rmse[0] = rmse
             return rmse
 
-        def local_callback(xk):
-            if callback_instance is not None:
-                callback_instance(xk, last_rmse[0])
-        
+        # Prepare bounds in required format: [(low, high)]
         bounds_list = [bounds]
+        
         for i in range(n_starts):
+            # Use the provided initial guess for the first start; for subsequent starts use a random candidate within bounds
             if i == 0:
                 x0 = [initial_guess]
             else:
                 low, high = bounds
                 candidate = np.random.uniform(low, high)
                 x0 = [candidate]
+            
+            # Define a local callback that sends the current parameter vector and last RMSE to our callback_instance
+            def local_callback(xk):
+                if callback_instance is not None:
+                    # Pass current xk and the last computed rmse
+                    callback_instance(xk, last_rmse[0])
+            
+            # Run minimization with L-BFGS-B for this starting point
             result = minimize(
                 lambda x: objective(x[0]),
                 x0=x0,
@@ -365,6 +375,10 @@ class FVTModel(PermeationModel):
                 best_fun = result.fun
                 best_result = result
                 best_rmse = result.fun
+            
+            # Print progress message after each run
+            time.sleep(0.5)
+            print(f"Optimization run {i+1}: D1_prime = {result.x[0]}, RMSE = {result.fun}")
         
         if callback_instance is not None:
             callback_instance.close()
@@ -375,14 +389,13 @@ class FVTModel(PermeationModel):
             'optimisation_result': best_result,
             'optimisation_history': callback_instance.history if callback_instance is not None else []
         }
-        print(f"Best optimization result: {best_result}")
+        # print(f"Best optimization result: {best_result}")
         
         return best_params
 
-
-    def _fit_D1prime_DT0(self, data: pd.DataFrame, initial_guess=(5.0, 1e-6),
+    def _fit_D1prime_DT0(self, data: pd.DataFrame, initial_guess=(5.0, 1e-7),
                           bounds=((1.01, 100), (1e-8, 1e-5)), n_starts=1,
-                          track_progress: bool = False) -> dict:
+                          track_fitting_progress: bool = False) -> dict:
         """
         Helper function to optimize both D1_prime and DT_0.
         

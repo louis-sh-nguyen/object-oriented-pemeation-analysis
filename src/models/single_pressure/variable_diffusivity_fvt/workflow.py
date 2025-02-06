@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from ....utils.data_processing import preprocess_data
 from ..variable_diffusivity_fvt import FVTModel
+import time
 from ..variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
     plot_diffusivity_location_profile,
@@ -133,7 +134,7 @@ def manual_workflow(
     
     # Create figure with subplots
     # fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5)) 1x3 plot
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))    # 2x2 plot
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))    # 2x2 plot
     
     # Plot concentration profile evolution
     plot_diffusivity_profile(
@@ -210,6 +211,7 @@ def data_fitting_workflow(
     diameter: float,
     flowrate: float,
     DT_0: float,
+    D1_prime: float,
     fitting_settings: Optional[dict] = None,  # New fitting_settings argument
     output_settings: Dict[str, Any] = {
         'output_dir': None,
@@ -265,8 +267,8 @@ def data_fitting_workflow(
         thickness=thickness,
         diameter=diameter,
         flowrate=flowrate,
-        DT_0=DT_0,
-        D1_prime=5.0,   # placeholder value
+        DT_0=DT_0,  # placeholder value
+        D1_prime=D1_prime,   # placeholder value
     )
     
     # Load experimental data
@@ -290,7 +292,7 @@ def data_fitting_workflow(
     if len(processed_exp_data) > 1000:
         n = len(processed_exp_data) // 1000
         processed_exp_data = processed_exp_data.iloc[::n].reset_index(drop=True)
-        
+    
     # Merge default fitting settings using DEFAULT_FITTING_SETTINGS
     final_fitting_settings = {**DEFAULT_FITTING_SETTINGS, **(fitting_settings or {})}
     
@@ -298,9 +300,9 @@ def data_fitting_workflow(
     fit_results = model.fit_to_data(
         data=processed_exp_data,
         fitting_settings=final_fitting_settings,
-        track_progress=True
+        track_fitting_progress=True
     )
-    
+    time.sleep(0.5)
     print("Fitting completed. Fitting Results:")
     for key, value in fit_results.items():
         print(f"{key}: {value}")
