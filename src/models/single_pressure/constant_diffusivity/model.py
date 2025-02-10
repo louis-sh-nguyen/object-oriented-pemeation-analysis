@@ -48,7 +48,7 @@ class TimelagModel(PermeationModel):
             data,
             thickness=self.params.transport.thickness,
             diameter=self.params.transport.diameter,
-            temp_celsius=self.params.base.temperature,
+            temperature=self.params.base.temperature,
             flowrate=self.params.transport.flowrate
         )
         

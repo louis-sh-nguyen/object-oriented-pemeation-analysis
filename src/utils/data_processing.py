@@ -120,12 +120,12 @@ def calculate_cumulative_flux(
     return df['cumulative flux']
 
 def preprocess_data(data: pd.DataFrame,
-                   thickness: float,
-                   diameter: float,
-                   flowrate: float,
-                   temp_celsius: float,
-                   truncate_at_stabilisation: bool = False,
-                   stabilisation_threshold: float = None) -> pd.DataFrame:
+                    thickness: float,
+                    diameter: float,
+                    flowrate: float,
+                    temperature: float,
+                    truncate_at_stabilisation: bool = False,
+                    stabilisation_threshold: float = None) -> pd.DataFrame:
     """
     Preprocess experimental permeation data for analysis
     
@@ -184,7 +184,7 @@ def preprocess_data(data: pd.DataFrame,
     df.attrs['thickness'] = thickness
     df.attrs['diameter'] = diameter
     df.attrs['area'] = area
-    df.attrs['temperature'] = temp_celsius
+    df.attrs['temperature'] = temperature
     
     # Find stabilisation time and truncate if requested
     if truncate_at_stabilisation:

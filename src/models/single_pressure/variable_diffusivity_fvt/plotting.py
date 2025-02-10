@@ -39,7 +39,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     
     ax.set_xlabel('Position / cm')
     ax.set_ylabel('Time / s')
-    ax.set_title('Concentration Profile Evolution')
+    ax.set_title('Diffusivity Profile Evolution')
     
     if save_path:
         plt.tight_layout()

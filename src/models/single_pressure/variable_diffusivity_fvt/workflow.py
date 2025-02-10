@@ -213,6 +213,7 @@ def data_fitting_workflow(
     DT_0: float,
     D1_prime: float,
     fitting_settings: Optional[dict] = None,  # New fitting_settings argument
+    stabilisation_threshold: Optional[float] = 0.003,    # New optional parameter
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -239,17 +240,20 @@ def data_fitting_workflow(
         Membrane diameter [cm]
     flowrate : float
         Flow rate [cm³(STP) min⁻¹]
-    initial_guess : dict, optional
-        Initial guess for fitting parameters:
-        - D1_prime: normalized diffusivity at x=0
+    DT_0 : float
+        D0(T) parameter
+    D1_prime : float
+        D1' parameter
+    fitting_settings : dict, optional
+        Settings dictionary that may include:
+        - mode: "d1" (fit only D1_prime) or "both" (fit both D1_prime and DT_0)
+        - initial_guess: float (if mode "d1") or tuple (if mode "both")
+        - bounds: tuple (if mode "d1") or tuple of tuples (if mode "both")
+        - n_starts: number of multi-starts (default 1)
     output_settings : dict, optional
-        Dictionary containing output settings:
-        - output_dir: Directory to save outputs (default: None)
-        - display_plots: Whether to display plots (default: True)
-        - save_plots: Whether to save plots (default: True)
-        - save_data: Whether to save data (default: True)
-        - plot_format: Format for saving plots (default: 'png')
-        - data_format: Format for saving data (default: 'csv')
+        Dictionary containing output settings (see defaults above)
+    stabilisation_threshold : float, optional
+        Threshold used in the data processing to determine stabilisation time (default: 0.003)
     
     Returns
     -------
@@ -274,14 +278,14 @@ def data_fitting_workflow(
     # Load experimental data
     exp_data = pd.read_excel(data_path)
     
-    # Preprocess data and calculate tau
+    # Preprocess data and calculate tau using provided stabilisation_threshold
     processed_exp_data = preprocess_data(
         exp_data,
         thickness=model.params.transport.thickness,
         diameter=model.params.transport.diameter,
         flowrate=model.params.transport.flowrate,
-        temp_celsius=model.params.base.temperature,
-        stabilisation_threshold=0.002,
+        temperature=model.params.base.temperature,
+        stabilisation_threshold=stabilisation_threshold,
         truncate_at_stabilisation=True,
     )
     

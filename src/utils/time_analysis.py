@@ -26,11 +26,13 @@ def find_stabilisation_time(
     stable_mask = (rel_change < threshold) & (rel_std < threshold)
     
     if not stable_mask.any():
-        raise ValueError(f"Flux does not stabilize within threshold {threshold}")
+        print(f"Warning: Flux does not stabilize within threshold {threshold}")
+        return float(data.iloc[-1][time_col])
     
-    # Get first stable point
-    stab_idx = stable_mask.idxmax()
-    return float(data.loc[stab_idx, time_col])
+    else:
+        # Get first stable point
+        stab_idx = stable_mask.idxmax()
+        return float(data.loc[stab_idx, time_col])
 
 def find_time_lag(
     data: pd.DataFrame,

@@ -9,7 +9,6 @@ import numba as nb
 
 from ...base_model import PermeationModel
 from ...base_parameters import BaseParameters
-from ....utils.data_processing import preprocess_data
 from .parameters import FVTModelParameters, FVTTransportParams
 from ....utils.optimisation import OptimisationCallback
 import time

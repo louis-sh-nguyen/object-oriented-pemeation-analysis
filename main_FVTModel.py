@@ -231,12 +231,13 @@ def test_data_fitting_workflow():
         flowrate=8.0,
         DT_0=2.8e-7,
         D1_prime=5.0,
+        stabilisation_threshold=0.001,
         fitting_settings={
             'mode': 'D1',   # 'D1' or 'both'
             'initial_guess': 2.0,   # 5.0 or (5.0, 1e-7)
             'bounds': (1.001, 20),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
             'n_starts': 1,  # 1, 2, 3 ,...
-        },     
+        },
         output_settings={
             'output_dir': 'outputs/fitting',
             'display_plots': True,
