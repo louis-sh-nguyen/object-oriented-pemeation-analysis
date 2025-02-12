@@ -246,6 +246,12 @@ class FVTModel(PermeationModel):
             bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
         return initial_guess, bounds, n_starts
 
+    def _calculate_adaptive_scaling(self, params):
+        """
+        Calculate adaptive scaling factors based on current parameter values.
+        """
+        return [10.0**np.floor(np.log10(abs(p))) for p in params]
+    
     def fit_to_data(self, data: pd.DataFrame, track_fitting_progress: bool = False,
                     fitting_settings: Optional[dict] = None) -> dict:
         """
@@ -271,28 +277,29 @@ class FVTModel(PermeationModel):
         """
         # Determine mode (default to "D1")
         mode = fitting_settings.get("mode", "D1") if fitting_settings else "D1"
-        # Process fitting settings into initial_guess, bounds, and n_starts.
+        # Process fitting settings into initial_guess, bounds, and n_starts
         initial_guess, bounds, n_starts = self._process_fitting_settings(mode, fitting_settings)
         
-        if mode == "both":
-            # Check required columns for fitting both parameters.
-            required_cols = ['time', 'tau', 'normalised_flux']
+        if mode == "D1":
+            required_cols = ['tau', 'normalised_flux']
+            missing_cols = [col for col in required_cols if col not in data.columns]
+            if missing_cols:
+                raise ValueError(f"Data is missing required columns: {missing_cols}")
+            return self._fit_D1prime(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
+                                      track_fitting_progress=track_fitting_progress)
+        elif mode == "both":
+            # Check required columns for fitting both parameters
+            required_cols = ['time', 'normalised_flux']
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Data is missing required columns: {missing_cols}")
             return self._fit_D1prime_DT0(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
                                          track_fitting_progress=track_fitting_progress)
         else:
-            # Default mode: fit only D1_prime.
-            required_cols = ['tau', 'normalised_flux']
-            missing_cols = [col for col in required_cols if col not in data.columns]
-            if missing_cols:
-                raise ValueError(f"Data is missing required columns: {missing_cols}")
-            return self._fit_D1_prime(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts,
-                                      track_fitting_progress=track_fitting_progress)
-
-    def _fit_D1_prime(self, data: pd.DataFrame, initial_guess=5.0, bounds=(1.01, 100), n_starts=1,
-                      track_fitting_progress: bool = True) -> dict:
+            raise ValueError("Invalid mode. Choose 'D1' or 'both'.")
+        
+    def _fit_D1prime(self, data: pd.DataFrame, initial_guess=5.0, bounds=(1.01, 100), n_starts=1,
+                      exploitation_weight: float=0.7, track_fitting_progress: bool = True) -> dict:
         """
         Helper function to optimize only D1_prime.
         
@@ -306,7 +313,9 @@ class FVTModel(PermeationModel):
             Bounds for D1_prime.
         n_starts : int
             Number of multi-start optimisations.
-        track_progress : bool
+        exploitation_weight : float
+            Balance between exploitation (1.0) and exploration (0.0)
+        track_fitting_progress : bool
             Whether to track optimisation progress.
         
         Returns
@@ -314,21 +323,17 @@ class FVTModel(PermeationModel):
         dict
             Dictionary containing fitted D1_prime and RMSE.
         """
-            # Validate that n_starts is an integer greater than or equal to 1
         if not isinstance(n_starts, int) or n_starts < 1:
             raise ValueError("n_starts must be an integer greater than or equal to 1")
         
         best_result = None
-        best_fun = np.inf
         best_rmse = np.inf
-
-        # Create callback only if tracking progress.
         callback_instance = OptimisationCallback(param_names=["D1_prime"]) if track_fitting_progress else None
+        successful_params = []
         last_rmse = [float('inf')]
         
         def objective(params):
             D1_prime = params
-            # Calculate flux using the current D1_prime
             _, flux_df = self._solve_pde(
                 L=self.params.transport.thickness,
                 D1_prime=D1_prime,
@@ -338,62 +343,63 @@ class FVTModel(PermeationModel):
                 dx=0.005,
                 track_solving_progress=False
             )
-            # Interpolate model normalized flux to data tau points
             model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
             rmse = np.sqrt(np.mean((data['normalised_flux'] - model_norm_flux) ** 2))
             last_rmse[0] = rmse
             return rmse
 
-        # Prepare bounds in required format: [(low, high)]
         bounds_list = [bounds]
         
         for i in range(n_starts):
-            # Use the provided initial guess for the first start; for subsequent starts use a random candidate within bounds
-            if i == 0:
-                x0 = [initial_guess]
+            # Determine starting point using exploration vs exploitation
+            if i == 0 or not successful_params or np.random.random() > exploitation_weight:
+                # Exploration: Use initial guess or random values
+                if i == 0:
+                    current_guess = initial_guess
+                else:
+                    current_guess = np.random.uniform(bounds[0], bounds[1])
             else:
-                low, high = bounds
-                candidate = np.random.uniform(low, high)
-                x0 = [candidate]
+                # Exploitation: Sample near successful previous results
+                base_param = successful_params[np.random.randint(len(successful_params))]
+                # Add random perturbation (10% of parameter range)
+                perturbation = np.random.normal(0, 0.1 * (bounds[1] - bounds[0]))
+                current_guess = np.clip(base_param + perturbation, bounds[0], bounds[1])
             
-            # Define a local callback that sends the current parameter vector and last RMSE to our callback_instance
+            x0 = [current_guess]
+            
             def local_callback(xk):
                 if callback_instance is not None:
-                    # Pass current xk and the last computed rmse
                     callback_instance(xk, last_rmse[0])
             
-            # Run minimization with L-BFGS-B for this starting point
             result = minimize(
                 lambda x: objective(x[0]),
                 x0=x0,
                 method='L-BFGS-B',
                 bounds=bounds_list,
-                callback=local_callback
+                callback=local_callback if track_fitting_progress else None
             )
-            if result.fun < best_fun:
-                best_fun = result.fun
-                best_result = result
-                best_rmse = result.fun
             
-            # Print progress message after each run
-            time.sleep(0.5)
-            print(f"Optimization run {i+1}: D1_prime = {result.x[0]}, RMSE = {result.fun}")
-        
+            if result.success:
+                successful_params.append(result.x[0])
+            
+            if result.fun < best_rmse:
+                best_rmse = result.fun
+                best_result = result
+
         if callback_instance is not None:
             callback_instance.close()
 
-        best_params = {
+        return {
             'D1_prime': best_result.x[0],
             'rmse': best_rmse,
             'optimisation_result': best_result,
-            'optimisation_history': callback_instance.history if callback_instance is not None else []
+            'optimisation_history': callback_instance.history if callback_instance is not None else [],
+            'n_successful': len(successful_params)
         }
-        # print(f"Best optimization result: {best_result}")
-        
-        return best_params
 
-    def _fit_D1prime_DT0(self, data: pd.DataFrame, initial_guess=(5.0, 1e-7),
-                          bounds=((1.01, 100), (1e-8, 1e-5)), n_starts=1,
+    def _fit_D1prime_DT0(self, data: pd.DataFrame, initial_guess:Tuple=(5.0, 1e-7),
+                          bounds:Tuple=((1.01, 100), (1e-8, 1e-5)), n_starts: float=1,                          
+                          exploitation_weight: float=0.7,
                           track_fitting_progress: bool = False) -> dict:
         """
         Helper function to optimize both D1_prime and DT_0.
@@ -408,6 +414,8 @@ class FVTModel(PermeationModel):
             Bounds for (D1_prime, DT_0).
         n_starts : int
             Number of multi-start optimisations.
+        exploitation_weight : float
+            Balance between exploitation (1.0) and exploration (0.0)
         track_progress : bool
             Whether to track optimisation progress.
         
@@ -416,6 +424,111 @@ class FVTModel(PermeationModel):
         dict
             Dictionary containing fitted D1_prime, DT_0 and RMSE.
         """
-        # [Implementation for multi-start optimisation for both parameters]
-        # ... (Your existing code using initial_guess, bounds, and n_starts)
-        pass  # Replace with your actual implementation
+
+        best_result = None
+        best_rmse = np.inf
+        
+        # Create callback only if tracking progress
+        callback_instance = OptimisationCallback(param_names=["D1_prime", "DT_0"]) if track_fitting_progress else None
+        
+        # Store all successful results for exploitation
+        successful_params = []
+        
+        last_rmse = [float('inf')]  # Moved outside to be accessible by objective
+
+        def objective(scaled_params, scale_factors):
+            params = [sp*sf for sp, sf in zip(scaled_params, scale_factors)]
+            D1_prime, DT_0 = params
+            
+            _, flux_df = self._solve_pde(
+                L=self.params.transport.thickness,
+                D1_prime=D1_prime,
+                DT_0=DT_0,
+                T=data['time'].max(),
+                X=1.0,
+                dx=0.005,
+                track_solving_progress=False
+            )
+            
+            model_norm_flux = np.interp(data['time'], 
+                                    flux_df['time'], 
+                                    flux_df['normalised_flux'])
+            rmse = np.sqrt(np.mean((data['normalised_flux'] - model_norm_flux) ** 2))
+            last_rmse[0] = rmse
+            return rmse
+        
+        for i in range(n_starts):
+            # Determine starting point using exploration vs exploitation
+            if i == 0 or not successful_params or np.random.random() > exploitation_weight:
+                # Exploration: Use initial guess or random values
+                if i == 0:
+                    current_guess = initial_guess
+                else:
+                    current_guess = (
+                        np.random.uniform(bounds[0][0], bounds[0][1]),
+                        np.random.uniform(bounds[1][0], bounds[1][1])
+                    )
+            else:
+                # Exploitation: Sample near successful previous results
+                base_params = successful_params[np.random.randint(len(successful_params))]
+                # Add random perturbation (10% of parameter range)
+                perturbation = (
+                    np.random.normal(0, 0.1 * (bounds[0][1] - bounds[0][0])),
+                    np.random.normal(0, 0.1 * (bounds[1][1] - bounds[1][0]))
+                )
+                current_guess = (
+                    np.clip(base_params[0] + perturbation[0], bounds[0][0], bounds[0][1]),
+                    np.clip(base_params[1] + perturbation[1], bounds[1][0], bounds[1][1])
+                )
+            
+            # Calculate adaptive scaling for this iteration
+            scale_factors = self._calculate_adaptive_scaling(current_guess)
+            scaled_initial = [p/sf for p, sf in zip(current_guess, scale_factors)]
+            scaled_bounds = [tuple(b/sf for b in bnd) for bnd, sf in zip(bounds, scale_factors)]
+            
+            def local_callback(xk):
+                if callback_instance is not None:
+                    unscaled_xk = [x*sf for x, sf in zip(xk, scale_factors)]
+                    callback_instance(unscaled_xk, last_rmse[0])
+            
+            # minimize using scaled parameters with objective that takes scale_factors
+            result = minimize(
+                lambda x: objective(x, scale_factors),
+                x0=scaled_initial,
+                method='L-BFGS-B',
+                bounds=scaled_bounds,
+                callback=local_callback if track_fitting_progress else None,
+                options={
+                    'ftol': 1e-8,
+                    'gtol': 1e-8,
+                    'eps': 1e-8,
+                    'maxiter': 100,
+                    'maxfun': 200,
+                    'maxcor': 50,
+                }
+            )
+            
+            # Store successful results for exploitation
+            if result.success:
+                unscaled_result = [x*sf for x, sf in zip(result.x, scale_factors)]
+                successful_params.append(unscaled_result)
+            
+            if result.fun < best_rmse:
+                best_rmse = result.fun
+                best_result = result
+                best_scale_factors = scale_factors
+        
+        # Unscale final results
+        unscaled_x = [x*sf for x, sf in zip(best_result.x, best_scale_factors)]
+        
+        if callback_instance is not None:
+            callback_instance.close()
+        
+        return {
+            'D1_prime': unscaled_x[0],
+            'DT_0': unscaled_x[1],
+            'rmse': best_rmse,
+            'optimisation_result': best_result,
+            'optimisation_history': callback_instance.history if callback_instance is not None else [],
+            'n_successful': len(successful_params)  # Number of successful runs
+        }

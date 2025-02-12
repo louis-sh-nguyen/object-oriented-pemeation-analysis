@@ -95,7 +95,7 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
     ax.set_xlabel('Time / s')
     ax.set_ylabel('Dimensionless Flux')
     ax.set_title('Flux Evolution')
-    ax.legend()
+    ax.legend(loc='best')
     ax.grid(True, alpha=0.3)
     
     if save_path:
@@ -209,7 +209,7 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
     ax.set_xlabel('Time / s')
     ax.set_ylabel('Normalised Flux')
     ax.set_title('Normalised Flux Evolution')
-    ax.legend()
+    ax.legend(loc='best')
     ax.grid(True, alpha=0.3)
     
     if save_path:
@@ -275,7 +275,5 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
     if display:
         plt.tight_layout()
         plt.show()
-    # else:
-    #     plt.close(fig)
     
     return fig, ax

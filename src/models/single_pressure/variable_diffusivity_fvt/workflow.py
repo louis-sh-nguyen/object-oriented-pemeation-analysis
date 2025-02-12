@@ -16,7 +16,7 @@ from ..variable_diffusivity_fvt.plotting import (
 # Default settings dictionaries
 DEFAULT_SIMULATION_PARAMS = {
     'T': 10e3,  # total time [s]
-    'dx': 0.01,   # spatial step [adim]
+    'dx': 0.005,   # spatial step [adim]
     'X': 1.0      # normalized position
 }
 
@@ -246,7 +246,7 @@ def data_fitting_workflow(
         D1' parameter
     fitting_settings : dict, optional
         Settings dictionary that may include:
-        - mode: "d1" (fit only D1_prime) or "both" (fit both D1_prime and DT_0)
+        - mode: "D1" (fit only D1_prime) or "both" (fit both D1_prime and DT_0)
         - initial_guess: float (if mode "d1") or tuple (if mode "both")
         - bounds: tuple (if mode "d1") or tuple of tuples (if mode "both")
         - n_starts: number of multi-starts (default 1)
@@ -264,6 +264,11 @@ def data_fitting_workflow(
     figures : dict
         Dictionary containing figure objects for plots
     """
+    # Validate fitting mode
+    valid_modes = ['D1', 'both']
+    if fitting_settings and 'mode' in fitting_settings and fitting_settings['mode'].lower() not in valid_modes:
+        raise ValueError(f"Invalid fitting mode: {fitting_settings['mode']}. Must be one of {valid_modes}")
+    
     # Initialize model with initial parameters
     model = FVTModel.from_parameters(
         pressure=pressure,
@@ -288,9 +293,10 @@ def data_fitting_workflow(
         stabilisation_threshold=stabilisation_threshold,
         truncate_at_stabilisation=True,
     )
-    
+        
     # Create 'tau' column
-    processed_exp_data['tau'] = model.params.transport.DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
+    if fitting_settings['mode'] == 'D1':
+        processed_exp_data['tau'] = model.params.transport.DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
     
     # Downsample to 1000 points for faster optimization
     if len(processed_exp_data) > 1000:
@@ -311,7 +317,16 @@ def data_fitting_workflow(
     for key, value in fit_results.items():
         print(f"{key}: {value}")
     
-    # Run simulation with fitted parameters
+    # Process the values
+    if fitting_settings['mode'] == 'D1':
+        (DT_0, D1_prime) = (model.params.transport.DT_0, fit_results['D1_prime'])
+    elif fitting_settings['mode'] == 'both':
+        (DT_0, D1_prime) = (fit_results['DT_0'], fit_results['D1_prime'])
+    
+    # (Re)calculate the 'tau' column with fitted parameters
+    processed_exp_data['tau'] = DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
+    
+    # Run simulation with fitted parameters    
     model, Dprime_df, flux_df, figures = manual_workflow(
         pressure=pressure,
         temperature=temperature,
@@ -319,7 +334,7 @@ def data_fitting_workflow(
         diameter=diameter,
         flowrate=flowrate,
         DT_0=DT_0,
-        D1_prime=fit_results['D1_prime'],
+        D1_prime=D1_prime,
         experimental_data=processed_exp_data,
         simulation_params={
             'T': processed_exp_data['time'].max(),
