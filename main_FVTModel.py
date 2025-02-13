@@ -258,7 +258,7 @@ def test_data_fitting_workflow_D1prime_DT0():
         flowrate=8.0,
         DT_0=2.8e-7,
         D1_prime=5.0,
-        stabilisation_threshold=0.005,
+        stabilisation_threshold=0.002,  # 0.005 for breakthrough curve, 0.002 for whole curve
         fitting_settings={
             'mode': 'both',   # 'D1' or 'both'
             'initial_guess': (2.0, 1e-7),   # 5.0 or (5.0, 1e-7)
@@ -380,5 +380,5 @@ if __name__ == '__main__':
     # test_manual_workflow()
     # test_parameter_sensitivity()
     # test_data_fitting_workflow_D1prime()
-    # test_data_fitting_workflow_D1prime_DT0()
-    fit_all_data()
+    test_data_fitting_workflow_D1prime_DT0()
+    # fit_all_data()
