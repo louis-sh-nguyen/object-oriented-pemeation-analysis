@@ -218,7 +218,7 @@ class FVTModel(PermeationModel):
             dx=simulation_params['dx']
         )
     
-    def _process_fitting_settings(self, mode: str, fitting_settings: Optional[dict]) -> tuple:
+    def _process_fitting_settings(self, fitting_settings: Optional[dict]) -> tuple:
         """
         Process the fitting_settings argument and return a tuple
         (initial_guess, bounds, n_starts) to be passed to the helper functions.
@@ -231,20 +231,23 @@ class FVTModel(PermeationModel):
         - bounds: tuple of tuples (default: ((1.01, 100), (1e-8, 1e-5)))
         n_starts is an integer with default value 1.
         """
-        n_starts = 1
-        if fitting_settings:
-            n_starts = fitting_settings.get("n_starts", 1)
+        n_starts = fitting_settings.get("n_starts", 1) if fitting_settings else 1
+        exploitation_weight = fitting_settings.get("exploitation_weight", 0.7) if fitting_settings else 0.7
+        
+        mode = fitting_settings.get("mode", "D1") if fitting_settings else "D1"
+        
         if mode == "both":
             default_init = (self.params.transport.D1_prime, self.params.transport.DT_0) if hasattr(self, "params") else (5.0, 1e-6)
             initial_guess = fitting_settings.get("initial_guess", default_init) if fitting_settings else default_init
             default_bounds = ((1.01, 100), (1e-8, 1e-5))
             bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
-        else:  # mode == "d1"
+        elif mode == 'D1':
             default_init = self.params.transport.D1_prime if hasattr(self, "params") else 5.0
             initial_guess = fitting_settings.get("initial_guess", default_init) if fitting_settings else default_init
             default_bounds = (1.01, 100)
             bounds = fitting_settings.get("bounds", default_bounds) if fitting_settings else default_bounds
-        return initial_guess, bounds, n_starts
+        
+        return initial_guess, bounds, n_starts, exploitation_weight
 
     def _calculate_adaptive_scaling(self, params):
         """
@@ -269,6 +272,8 @@ class FVTModel(PermeationModel):
             - initial_guess: float (if mode "d1") or tuple (if mode "both")
             - bounds: tuple (if mode "d1") or tuple of tuples (if mode "both")
             - n_starts: number of multi-starts (default 1)
+            - exploitation_weight: balance between exploitation (1.0) and exploration (0.0)
+            - track_fitting_progress: whether to track optimisation progress
         
         Returns
         -------
@@ -277,8 +282,9 @@ class FVTModel(PermeationModel):
         """
         # Determine mode (default to "D1")
         mode = fitting_settings.get("mode", "D1") if fitting_settings else "D1"
+        
         # Process fitting settings into initial_guess, bounds, and n_starts
-        initial_guess, bounds, n_starts = self._process_fitting_settings(mode, fitting_settings)
+        initial_guess, bounds, n_starts, exploitation_weight = self._process_fitting_settings(fitting_settings)
         
         if mode == "D1":
             required_cols = ['tau', 'normalised_flux']

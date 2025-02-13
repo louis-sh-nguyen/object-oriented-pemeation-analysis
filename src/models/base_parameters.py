@@ -13,14 +13,14 @@ class BaseParameters:
     temperature : float
         Operating temperature [°C]
     """
-    pressure: float      # [bar]
-    temperature: float   # [°C]
+    pressure: Optional[float] = None      # [bar]
+    temperature: Optional[float] = None   # [°C]
 
     def validate(self) -> None:
         """Validate parameter values"""
-        if self.pressure <= 0:
+        if self.pressure is not None and self.pressure <= 0:
             raise ValueError("Pressure must be positive")
-        if self.temperature < -273.15:
+        if self.temperature is not None and self.temperature < -273.15:
             raise ValueError("Temperature must be above absolute zero")
 
 @dataclass

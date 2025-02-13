@@ -87,16 +87,6 @@ def test_pde_solving():
     print(f"Time points: {len(flux_df)}")
     print(f"Spatial points: {len(Dprime_df.columns)}")
     
-    # Plot results
-    # fig, ((ax1, ax2, ax3)) = plt.subplots(1, 3, figsize=(16, 4))
-    
-    # Plot diffusivity profile evolution
-    # plot_diffusivity_profile(
-    #     diffusivity_profile=Dprime_df,
-    #     ax=ax1,
-    #     display=False
-    # )
-    
     # Plot diffusivity-location profiles
     plot_diffusivity_location_profile(
         diffusivity_profile=Dprime_df,
@@ -217,7 +207,7 @@ def test_parameter_sensitivity():
     plt.tight_layout()
     plt.show()
     
-def test_data_fitting_workflow():
+def test_data_fitting_workflow_D1prime():
     """Test the FVT data fitting workflow"""
     # Turn off warning messages
     # warnings.filterwarnings('ignore')
@@ -231,7 +221,7 @@ def test_data_fitting_workflow():
         flowrate=8.0,
         DT_0=2.8e-7,
         D1_prime=5.0,
-        stabilisation_threshold=0.001,
+        stabilisation_threshold=0.005,
         fitting_settings={
             'mode': 'D1',   # 'D1' or 'both'
             'initial_guess': 2.0,   # 5.0 or (5.0, 1e-7)
@@ -250,12 +240,145 @@ def test_data_fitting_workflow():
     
     # Print fitting results
     print("\nFitting Results:")
-    print(f"D1_prime: {fit_results['D1_prime']:.4e}")
+    print(f"D1_prime: {fit_results['D1_prime']:.4e}") if 'D1_prime' in fit_results else None
+    print(f'DT0: {fit_results["DT_0"]:.4e}') if 'DT_0' in fit_results else None
     print(f"RMSE: {fit_results['rmse']:.4e}")
+
+def test_data_fitting_workflow_D1prime_DT0():
+    """Test the FVT data fitting workflow"""
+    # Turn off warning messages
+    # warnings.filterwarnings('ignore')
+    # Run workflow (optimization tracking is handled internally)
+    model, fit_results, figures = data_fitting_workflow(
+        data_path='data/single_pressure/RUN_H_25C-100bar_7.xlsx',
+        pressure=50.0,
+        temperature=25.0,
+        thickness=0.1,
+        diameter=1.0,
+        flowrate=8.0,
+        DT_0=2.8e-7,
+        D1_prime=5.0,
+        stabilisation_threshold=0.005,
+        fitting_settings={
+            'mode': 'both',   # 'D1' or 'both'
+            'initial_guess': (2.0, 1e-7),   # 5.0 or (5.0, 1e-7)
+            'bounds': ((1.001, 10), (1e-8, 1e-6)),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
+            'n_starts': 1,  # 1, 2, 3 ,...
+        },
+        output_settings={
+            'output_dir': 'outputs/fitting',
+            'display_plots': True,
+            'save_plots': False,
+            'save_data': False,
+            'plot_format': 'png',
+            'data_format': 'csv'
+        }
+    )
+    
+    # Print fitting results
+    print("\nFitting Results:")
+    print(f"D1_prime: {fit_results['D1_prime']:.4e}") if 'D1_prime' in fit_results else None
+    print(f'DT0: {fit_results["DT_0"]:.4e}') if 'DT_0' in fit_results else None
+    print(f"RMSE: {fit_results['rmse']:.4e}")
+
+def fit_all_data(n=None):
+    """Apply data_fitting_workflow to all xlsx files in data/single_pressure folder"""
+    data_dir = 'data/single_pressure'
+    
+    # Create timestamp-based output directory
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    output_base_dir = f'outputs/fitting/{timestamp}'
+    os.makedirs(output_base_dir, exist_ok=True)
+    
+    # List all xlsx files in the data directory
+    data_files = [f for f in os.listdir(data_dir) if f.endswith('.xlsx')]
+    
+    # Limit number of files to process
+    if n is not None:
+        data_files = data_files[:n]
+    
+    # Store results for all files
+    all_results = {}
+    
+    for file in data_files:
+        print(f"\nProcessing {file}...")
+        data_path = os.path.join(data_dir, file)
+        
+        try:
+            # Extract temperature and pressure from filename
+            # Assuming filename format: "RUN_X_##C-##bar.xlsx"
+            try:
+                parts = file.replace('.xlsx', '').split('_')[-1].split('-')
+                temperature = float(parts[0].replace('C', ''))
+                pressure = float(parts[1].replace('bar', ''))
+            except:
+                temperature = None
+                pressure = None
+            
+            # Create file-specific output directory
+            file_output_dir = os.path.join(output_base_dir, file[:-5])
+            
+            # Run workflow for this file
+            model, fit_results, figures = data_fitting_workflow(
+                data_path=data_path,
+                pressure=pressure,
+                temperature=temperature,
+                thickness=0.1,
+                diameter=1.0,
+                flowrate=8.0,
+                DT_0=2.8e-7,
+                D1_prime=2.0,
+                stabilisation_threshold=0.005,
+                fitting_settings={
+                    'mode': 'both',
+                    'initial_guess': (2.0, 1e-7),
+                    'bounds': ((1.001, 10), (1e-8, 1e-6)),
+                    'n_starts': 3,
+                },
+                output_settings={
+                    'output_dir': file_output_dir,
+                    'display_plots': False,
+                    'save_plots': True,
+                    'save_data': True,
+                    'plot_format': 'svg',
+                    'data_format': 'csv'
+                }
+            )
+            
+            # Store essential results plus file name and conditions
+            all_results[file] = {
+                'file_name': file,
+                'temperature': temperature,
+                'pressure': pressure,
+                'D1_prime': fit_results['D1_prime'],
+                'DT_0': fit_results['DT_0'],
+                'rmse': fit_results['rmse']
+            }
+            
+            print(f"Successfully fitted {file}")
+            print(f"T = {temperature}°C, P = {pressure} bar")
+            print(f"D1_prime: {fit_results['D1_prime']:.4e}")
+            print(f"DT_0: {fit_results['DT_0']:.4e}")
+            print(f"RMSE: {fit_results['rmse']:.4e}")
+            
+        except Exception as e:
+            print(f"Error processing {file}: {str(e)}")
+            all_results[file] = {
+                'file_name': file,
+                'error': str(e)
+            }
+    
+    # Save overall results to CSV in timestamp directory
+    results_df = pd.DataFrame.from_dict(all_results, orient='index')
+    results_df.to_csv(os.path.join(output_base_dir, 'all_results.csv'), index=False)
+    print(f"\nCompleted processing all files. Results saved to {output_base_dir}")
 
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
     # test_manual_workflow()
     # test_parameter_sensitivity()
-    test_data_fitting_workflow()
+    # test_data_fitting_workflow_D1prime()
+    # test_data_fitting_workflow_D1prime_DT0()
+    fit_all_data()

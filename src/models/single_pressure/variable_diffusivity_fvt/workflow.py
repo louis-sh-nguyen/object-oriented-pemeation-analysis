@@ -34,7 +34,9 @@ DEFAULT_FITTING_SETTINGS = {
     'mode': 'd1',         # 'd1' or 'both'
     'initial_guess': 5.0,   # 5.0 or (5.0, 1e-7) when mode is 'both'
     'bounds': (1.001, 20),  # or ((1.001, 20), (1e-7, 1e-5))
-    'n_starts': 1
+    'n_starts': 1,
+    'exploitation_weight': 0.7,
+    'track_fitting_progress': False
 }
 
 def manual_workflow(
@@ -167,6 +169,7 @@ def manual_workflow(
         display=False
     )
     
+    plt.tight_layout()
     figures['combined'] = fig
     
     # Save outputs with timestamps
@@ -196,7 +199,6 @@ def manual_workflow(
                 flux_df.to_excel(writer, sheet_name='flux_evolution')
     
     if output_settings['display_plots']:
-        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)
@@ -264,10 +266,13 @@ def data_fitting_workflow(
     figures : dict
         Dictionary containing figure objects for plots
     """
+    # Merge default fitting settings with user-provided settings
+    final_fitting_settings = {**DEFAULT_FITTING_SETTINGS, **(fitting_settings or {})}
+    
     # Validate fitting mode
     valid_modes = ['D1', 'both']
-    if fitting_settings and 'mode' in fitting_settings and fitting_settings['mode'].lower() not in valid_modes:
-        raise ValueError(f"Invalid fitting mode: {fitting_settings['mode']}. Must be one of {valid_modes}")
+    if final_fitting_settings and 'mode' in final_fitting_settings and final_fitting_settings['mode'].lower() not in valid_modes:
+        raise ValueError(f"Invalid fitting mode: {final_fitting_settings['mode']}. Must be one of {valid_modes}")
     
     # Initialize model with initial parameters
     model = FVTModel.from_parameters(
@@ -295,16 +300,13 @@ def data_fitting_workflow(
     )
         
     # Create 'tau' column
-    if fitting_settings['mode'] == 'D1':
+    if final_fitting_settings['mode'] == 'D1':
         processed_exp_data['tau'] = model.params.transport.DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
     
     # Downsample to 1000 points for faster optimization
     if len(processed_exp_data) > 1000:
         n = len(processed_exp_data) // 1000
         processed_exp_data = processed_exp_data.iloc[::n].reset_index(drop=True)
-    
-    # Merge default fitting settings using DEFAULT_FITTING_SETTINGS
-    final_fitting_settings = {**DEFAULT_FITTING_SETTINGS, **(fitting_settings or {})}
     
     # Fit model to data with tracking
     fit_results = model.fit_to_data(
@@ -318,9 +320,9 @@ def data_fitting_workflow(
         print(f"{key}: {value}")
     
     # Process the values
-    if fitting_settings['mode'] == 'D1':
+    if final_fitting_settings['mode'] == 'D1':
         (DT_0, D1_prime) = (model.params.transport.DT_0, fit_results['D1_prime'])
-    elif fitting_settings['mode'] == 'both':
+    elif final_fitting_settings['mode'] == 'both':
         (DT_0, D1_prime) = (fit_results['DT_0'], fit_results['D1_prime'])
     
     # (Re)calculate the 'tau' column with fitted parameters

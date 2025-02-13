@@ -174,9 +174,15 @@ def preprocess_data(data: pd.DataFrame,
     # Calculate cumulative flux
     df['cumulative_flux'] = calculate_cumulative_flux(df)
     
-    # Noralised flux
+    # Noralised flux    #TODO: Add rolling average and exponential smoothing
     # Calculate 10-period rolling average and get its maximum value
-    rolling_avg_max = df['flux'].rolling(window=10, center=True).mean().max()
+    # rolling_avg_max = df['flux'].rolling(window=10, center=True).mean().max()
+    rolling_avg = df['flux'].rolling(window=20, center=True).mean()
+    # Damping factor
+    damping_factor = 0.1
+    # Apply exponential smoothing to damp out fluctuations
+    df['smoothed_flux'] = rolling_avg.ewm(alpha=damping_factor).mean()
+    rolling_avg_max = df['smoothed_flux'].max()
     # Normalize flux by dividing by the maximum rolling average
     df['normalised_flux'] = df['flux'] / rolling_avg_max
     
