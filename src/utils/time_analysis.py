@@ -8,12 +8,16 @@ def find_stabilisation_time(
     flux_col: str = 'flux',
     time_col: str = 'time',
     window: int = 100,
-    threshold: float = 0.002
+    threshold: float = 0.002,
+    min_flux_col_value: float = 0.01,
 ) -> float:
     """Find time when flux stabilizes using moving average analysis."""
     if len(data) < window:
         raise ValueError(f"Data length ({len(data)}) must be >= window size ({window})")
-        
+    
+    # Filter out initial region where flux is below min_flux_value
+    data = data[data[flux_col] > min_flux_col_value].copy()
+    
     # Calculate moving statistics
     flux_ma = data[flux_col].rolling(window=window, center=True).mean()
     flux_std = data[flux_col].rolling(window=window, center=True).std()
@@ -23,6 +27,7 @@ def find_stabilisation_time(
     rel_std = flux_std / flux_ma
     
     # Find stable region
+    # Option 1: Combined criteria (original)
     stable_mask = (rel_change < threshold) & (rel_std < threshold)
     
     if not stable_mask.any():

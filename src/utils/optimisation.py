@@ -1,13 +1,20 @@
 from typing import Dict, List, Any
 import numpy as np
-from tqdm.notebook import tqdm
+# from tqdm.notebook import tqdm
+from tqdm import tqdm, tqdm_notebook
+import sys
 
 class OptimisationCallback:
     """Callback class for optimization progress tracking"""
     def __init__(self, param_names: List[str]):
         self.param_names = param_names
         self.history: List[Dict[str, Any]] = []
-        self.pbar = tqdm(desc="Fitting (multi-start)", unit="iter")
+        # self.pbar = tqdm(desc="Fitting (multi-start)", unit="iter")   # tqdm from tqdlm.notebook, hence not working in terminal
+        # Use tqdm_notebook in Jupyter Notebook, otherwise use tqdm
+        if 'ipykernel' in sys.modules:
+            self.pbar = tqdm_notebook(desc="Fitting", unit="iter")
+        else:
+            self.pbar = tqdm(desc="Fitting", unit="iter")        
         
     def __call__(self, xk: np.ndarray, rmse: float) -> None:
         """
