@@ -20,20 +20,40 @@ Units:
 - Solubility / cm³(STP) cm⁻³
 """
 
-from .parameters import BaseParameters, ModelParameters, TransportParams
+from .base_parameters import (
+    BaseParameters,
+    ModelParameters,
+)
 from .base_model import PermeationModel
-from .single_pressure.constant_diffusivity.model import TimelagModel
-# from .single_pressure.variable_concentration.model import VariableConcentrationModel
-# from .multi_pressure.model import MultiStepModel
+from .single_pressure.constant_diffusivity import (
+    TimelagModel,
+    TimelagModelParameters,
+    TimelagTransportParams,
+    plot_timelag_analysis,
+    plot_concentration_profile,
+    plot_flux_over_time,
+    time_lag_analysis_workflow
+)
 
 __version__ = '0.1.0'
 
 __all__ = [
+    # Base classes
     'BaseParameters',
     'ModelParameters',
     'TransportParams',
     'PermeationModel',
+    
+    # Timelag specific
     'TimelagModel',
-    'VariableConcentrationModel',
-    'MultiStepModel'
+    'TimelagModelParameters',
+    'TimelagTransportParams',
+    
+    # Analysis functions
+    'time_lag_analysis_workflow',
+    
+    # Plotting functions
+    'plot_timelag_analysis',
+    'plot_concentration_profile',
+    'plot_flux_over_time'
 ]

@@ -31,6 +31,9 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     ax : plt.Axes
         Axes object
     """
+    if 'time' not in data.columns or 'cumulative_flux' not in data.columns:
+        raise ValueError("Data must contain 'time' and 'cumulative_flux' columns")
+    
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
     else:
@@ -38,30 +41,29 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     set_style()
     
     # Plot experimental data
-    ax.plot(data['time'], data['flux'], 'ko', label='Experimental', alpha=0.5)
+    ax.plot(data['time'], data['cumulative_flux'], 'ko', label='Experimental', alpha=0.5)
     
-    # Plot fitted line
-    stab_time = model.results['stabilisation_time']
-    time_lag = model.results['time_lag']
-    
-    slope = model.results['permeability'] / model.params.base.thickness
-    intercept = -slope * time_lag
+    # Plot fitted line using stored regression results
     x_fit = np.linspace(0, max(data['time']), 100)
-    y_fit = slope * x_fit + intercept
+    y_fit = model.get_steady_state_line(x_fit)
+    ax.plot(x_fit, y_fit, 'r-', label=f'Fitted Line (R² = {model.results["steady_state_r_squared"]:.4f})')
     
-    ax.plot(x_fit, y_fit, 'r-', label='Fitted Line')
-    ax.axvline(time_lag, color='g', ls='--', label='Time Lag')
+    # Add time lag line
+    time_lag = model.results['time_lag']
+    ax.axvline(time_lag, color='g', ls='--', label=f'Time Lag = {time_lag:.1f} s')
     
     ax.set_xlabel('Time / s')
-    ax.set_ylabel('Flux / cm³(STP) cm⁻² s⁻¹')
+    ax.set_ylabel('Cumulative Flux / cm³(STP) cm⁻²')
     ax.set_title('Time-Lag Analysis')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)
@@ -106,9 +108,11 @@ def plot_concentration_profile(conc_profile: pd.DataFrame,
     ax.set_title('Concentration Profile Evolution')
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)
@@ -157,9 +161,11 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
     ax.grid(True, alpha=0.3)
     
     if save_path:
+        plt.tight_layout()
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
     
     if display:
+        plt.tight_layout()
         plt.show()
     else:
         plt.close(fig)

@@ -4,101 +4,58 @@ import pandas as pd
 from scipy.stats import linregress
 
 from ...base_model import PermeationModel
-from ...parameters import BaseParameters, ModelParameters, TransportParams
+from ...base_parameters import BaseParameters
+from .parameters import TimelagModelParameters, TimelagTransportParams
 from ....utils.time_analysis import find_stabilisation_time, find_time_lag
 from ....utils.data_processing import preprocess_data
 
 class TimelagModel(PermeationModel):
-    """
-    Time-lag analysis model for constant diffusivity permeation.
+    """Time-lag analysis model for constant diffusivity permeation"""
     
-    Methods:
-    --------
-    fit_to_data: Fit model to experimental data
-    calculate_diffusivity: Calculate diffusion coefficient
-    calculate_permeability: Calculate permeability
-    calculate_solubility: Calculate solubility coefficient
-    """
-    def __init__(self, params: ModelParameters):
-        """
-        Initialize TimelagModel.
-
-        Parameters
-        ----------
-
-        params : ModelParameters
-            Model parameters containing base parameters and optional diffusivity and equilibrium concentration
-        """
+    def __init__(self, params: TimelagModelParameters):
         super().__init__(params)
-        self.results = {}
+        self.area = np.pi * (params.transport.diameter/2)**2  # [cm²]
+        self.results: Dict[str, Any] = {}
     
     @classmethod
-    def from_parameters(cls, 
-                        thickness: float,
-                        diameter: float,
-                        flowrate: float,
-                        pressure: float,
-                        temperature: float = 25.0,
-                        diffusivity: Optional[float] = None,
-                        equilibrium_concentration: Optional[float] = None) -> 'TimelagModel':
-        """
-        Create model instance from manually specified parameters
-        
-        Parameters
-        ----------
-
-        thickness : float
-            Membrane thickness [cm]
-        diameter : float
-            Membrane diameter [cm]
-        flowrate : float
-            Flow rate [cm³(STP) s⁻¹]
-        pressure : float
-            Pressure [bar]
-        temperature : float
-            Temperature [°C]
-        diffusivity : float, optional
-            Diffusion coefficient [cm² s⁻¹]
-        equilibrium_concentration : float, optional
-            Equilibrium concentration [cm³(STP) cm⁻³]
-        """
+    def from_parameters(cls,
+                       pressure: float,
+                       temperature: float,
+                       thickness: float,
+                       diameter: float,
+                       flowrate: Optional[float] = None,
+                       diffusivity: Optional[float] = None,
+                       equilibrium_concentration: Optional[float] = None) -> 'TimelagModel':
+        """Create model instance from parameters"""
         base_params = BaseParameters(
-            thickness=thickness,
-            diameter=diameter,
-            flowrate=flowrate,
             pressure=pressure,
             temperature=temperature
         )
         
-        transport_params = TransportParams(
+        transport_params = TimelagTransportParams(
+            thickness=thickness,
+            diameter=diameter,
+            flowrate=flowrate,
             diffusivity=diffusivity,
             equilibrium_concentration=equilibrium_concentration
         )
         
-        return cls(ModelParameters(base=base_params, transport=transport_params))
-    
+        return cls(TimelagModelParameters(base=base_params, transport=transport_params))
+
     def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """Fit model to experimental data"""
         processed_data = preprocess_data(
-            data, 
-            thickness=self.params.base.thickness,
-            diameter=self.params.base.diameter,
-            flowrate=self.params.base.flowrate,
-            temp_celsius=self.params.base.temperature
+            data,
+            thickness=self.params.transport.thickness,
+            diameter=self.params.transport.diameter,
+            temperature=self.params.base.temperature,
+            flowrate=self.params.transport.flowrate
         )
         
         self.calculate_diffusivity(processed_data)
         self.calculate_permeability(processed_data)
         self.calculate_solubility_coefficient()
         self.calculate_equilibrium_concentration()
-        
-        # Update transport parameters with fitted values
-        self.params.transport = TransportParams(
-            diffusivity=self.results['diffusivity'],
-            permeability=self.results['permeability'],
-            solubility_coefficient=self.results['solubility_coefficient'],
-            equilibrium_concentration=self.results['equilibrium_concentration']
-        )
         
         return processed_data
     
@@ -108,16 +65,18 @@ class TimelagModel(PermeationModel):
             return self.params.transport.diffusivity
             
         stab_time = find_stabilisation_time(data)
-        time_lag, _ = find_time_lag(data, stab_time)
+        time_lag, stats = find_time_lag(data, stab_time)
         
-        D = self.params.base.thickness**2 / (6 * time_lag)
+        D = self.params.transport.thickness**2 / (6 * time_lag)
         
-        self.results['time_lag'] = time_lag
-        self.results['stabilisation_time'] = stab_time
-        self.results['diffusivity'] = D
+        self.results.update({
+            'time_lag': time_lag,
+            'stabilisation_time': stab_time,
+            'diffusivity': D
+        })
         
         return D
-    
+
     def calculate_permeability(self, data: pd.DataFrame) -> float:
         """Calculate permeability [cm³(STP) cm⁻¹ s⁻¹ bar⁻¹]"""
         if self.params.transport.permeability is not None:
@@ -126,12 +85,33 @@ class TimelagModel(PermeationModel):
         stab_time = self.results.get('stabilisation_time') or find_stabilisation_time(data)
         steady_state = data[data['time'] >= stab_time]
         
-        slope = np.polyfit(steady_state['time'], steady_state['cumulative flux'], 1)[0]    # update to use cumulative flux
-        P = slope * self.params.base.thickness / self.params.base.pressure
+        # Calculate regression for steady state region
+        slope, intercept, r_value, p_value, std_err = linregress(
+            steady_state['time'], 
+            steady_state['cumulative_flux']
+        )
         
-        self.results['permeability'] = P
+        P = slope * self.params.transport.thickness / self.params.base.pressure
+        
+        # Store regression results
+        self.results.update({
+            'permeability': P,
+            'steady_state_slope': slope,
+            'steady_state_intercept': intercept,
+            'steady_state_r_squared': r_value**2,
+            'steady_state_std_err': std_err
+        })
+        
         return P
-    
+
+    def get_steady_state_line(self, times: np.ndarray) -> np.ndarray:
+        """Get steady state line for plotting"""
+        if 'steady_state_slope' not in self.results or 'steady_state_intercept' not in self.results:
+            raise ValueError("Calculate permeability first to get steady state line")
+            
+        return (self.results['steady_state_slope'] * times + 
+                self.results['steady_state_intercept'])
+
     def calculate_solubility_coefficient(self) -> float:
         """Calculate solubility coefficient [cm³(STP) cm⁻³ bar⁻¹]"""
         if self.params.transport.solubility_coefficient is not None:
@@ -163,7 +143,6 @@ class TimelagModel(PermeationModel):
         
         Parameters
         ----------
-
         D : float
             Diffusion coefficient [cm² s⁻¹]
         C_eq : float
@@ -179,7 +158,6 @@ class TimelagModel(PermeationModel):
             
         Returns
         -------
-
         Tuple[pd.DataFrame, pd.DataFrame]
             Concentration profile and flux results
         """
@@ -207,7 +185,7 @@ class TimelagModel(PermeationModel):
             
             # Space stepping
             for i in range(1, Nx-1):
-                C_new[i] = C[i] + D * dt / dx**2 * (C[i+1] - 2*C[i] + C[i-1])
+                C_new[i] = C[i] + D * dt * (C[i+1] - 2*C[i] + C[i-1]) / dx**2 
             
             # Boundary conditions
             C_new[0] = C_eq

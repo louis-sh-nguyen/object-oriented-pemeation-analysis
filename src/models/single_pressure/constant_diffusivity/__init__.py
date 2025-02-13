@@ -20,18 +20,33 @@ Units:
 - Solubility / cm³(STP) cm⁻³
 """
 
-from ....models.parameters import BaseParameters, ModelParameters, TransportParams
+from ...base_parameters import BaseParameters, ModelParameters
+from .parameters import TimelagModelParameters, TimelagTransportParams
 from .model import TimelagModel
-from .plotting import plot_timelag_analysis
+from .plotting import (
+    plot_timelag_analysis,
+    plot_concentration_profile,
+    plot_flux_over_time
+)
 from .workflow import time_lag_analysis_workflow
 
 __version__ = '0.1.0'
 
 __all__ = [
+    # Parameter classes
     'BaseParameters',
     'ModelParameters',
-    'TransportParams',
+    'TimelagModelParameters',
+    'TimelagTransportParams',
+    
+    # Model class
     'TimelagModel',
+    
+    # Analysis workflow
+    'time_lag_analysis_workflow',
+    
+    # Plotting functions
     'plot_timelag_analysis',
-    'time_lag_analysis_workflow'
+    'plot_concentration_profile',
+    'plot_flux_over_time'
 ]
