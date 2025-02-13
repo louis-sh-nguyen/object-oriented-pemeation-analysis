@@ -250,7 +250,7 @@ def test_data_fitting_workflow_D1prime_DT0():
     # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
     model, fit_results, figures = data_fitting_workflow(
-        data_path='data/single_pressure/RUN_H_25C-100bar_7.xlsx',
+        data_path='data/single_pressure/S4R4.xlsx',
         pressure=50.0,
         temperature=25.0,
         thickness=0.1,
@@ -261,9 +261,9 @@ def test_data_fitting_workflow_D1prime_DT0():
         stabilisation_threshold=0.002,  # 0.005 for breakthrough curve, 0.002 for whole curve
         fitting_settings={
             'mode': 'both',   # 'D1' or 'both'
-            'initial_guess': (2.0, 1e-7),   # 5.0 or (5.0, 1e-7)
-            'bounds': ((1.001, 10), (1e-8, 1e-6)),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
-            'n_starts': 1,  # 1, 2, 3 ,...
+            'initial_guess': (5.0, 1e-7),   # 5.0 or (5.0, 1e-7)
+            'bounds': ((1.001, 20), (1e-8, 1e-6)),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
+            'n_starts': 3,  # 1, 2, 3 ,...
         },
         output_settings={
             'output_dir': 'outputs/fitting',
