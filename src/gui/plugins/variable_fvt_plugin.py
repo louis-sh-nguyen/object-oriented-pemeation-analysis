@@ -2,7 +2,7 @@ import os
 import customtkinter as ctk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from . import ModelPlugin
+from . import ModelPlugin, ScrollableFrame  # Add ScrollableFrame to import
 from src.utils.defaults import (
     DEFAULTS,
     THICKNESS_DICT,
@@ -10,11 +10,14 @@ from src.utils.defaults import (
     FVT_FITTING_DEFAULTS
 )
 from src.models.single_pressure.variable_diffusivity_fvt.workflow import data_fitting_workflow
+from src.models.single_pressure.variable_diffusivity_fvt.plotting import plot_norm_flux_over_time
 
 class VariableFVTPlugin(ModelPlugin):
     def __init__(self):
         self.parameter_entries = {}
         self.data_dir = os.path.join("data", "single_pressure")
+        self.current_tabview = None
+        self.root = None  # Add this line
 
     def get_data_files(self):
         """Get list of Excel files in data directory"""
@@ -95,7 +98,7 @@ class VariableFVTPlugin(ModelPlugin):
         self.create_parameter_frame(params_box)
         
         # Add file selection section if in fitting mode
-        if mode == "Fitting":
+        if (mode == "Fitting"):
             # Separator line
             separator = ctk.CTkFrame(params_box, height=2)
             separator.pack(fill="x", padx=20, pady=10)
@@ -363,18 +366,21 @@ class VariableFVTPlugin(ModelPlugin):
         mode = self.fit_option.get()
         n_starts = int(self.n_starts.get())
         
+        # Convert UI mode selection to model's mode values
+        model_mode = 'D1' if mode == "D1 Prime Only" else 'both'
+        
         params = {
             'n_starts': n_starts,
-            'mode': 'D1' if mode == "D1 Prime Only" else 'both'
+            'mode': model_mode  # Use the converted mode value
         }
         
         # Get bounds and initial point based on mode
-        if mode == "D1 Prime Only":
+        if model_mode == 'D1':  # Changed condition to match model's mode values
             params.update({
                 'bounds': (float(self.d1_lower.get()), float(self.d1_upper.get())),
                 'initial_guess': float(self.d1_initial.get())
             })
-        else:
+        else:  # mode == 'both'
             params.update({
                 'bounds': (
                     (float(self.d1_lower.get()), float(self.d1_upper.get())),
@@ -394,7 +400,21 @@ class VariableFVTPlugin(ModelPlugin):
 
     def run_fitting(self):
         """Execute the fitting workflow"""
-        # Get parameters from inputs
+        # Switch to Results tab immediately
+        self.current_tabview.set("Results")
+        
+        # Clear previous results and show initial status
+        self.results_text.delete("1.0", "end")
+        self.results_text.insert("1.0", "Starting fitting process...\n")
+        self.fitting_status.configure(text="Initializing...")
+        self.progress.set(0)
+        self.ax.clear()
+        self.canvas.draw()
+        
+        # Update UI
+        self.root.update()
+
+        # Get parameters and validate
         params = self.get_parameters()
         if not params:
             return
@@ -417,15 +437,30 @@ class VariableFVTPlugin(ModelPlugin):
             return
             
         try:
-            # Clear previous results
-            self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", "Fitting in progress...\n")
-            self.progress.set(0)
-            self.ax.clear()
-            self.canvas.draw()
+            # Run fitting workflow with progress updates
+            self.fitting_status.configure(text="Fitting in progress...")
+            self.progress.set(0.2)
+            self.root.update()
+
+            def progress_callback(iteration, total, best_params, best_rmse):
+                """Callback to update fitting progress"""
+                progress = (iteration + 1) / total
+                self.progress.set(progress)
+                
+                # Update results text with current iteration info
+                self.results_text.delete("1.0", "end")
+                self.results_text.insert("1.0", f"Fitting Progress:\n")
+                self.results_text.insert("end", f"Iteration: {iteration + 1}/{total}\n")
+                self.results_text.insert("end", "\nBest Parameters:\n")
+                for param, value in best_params.items():
+                    self.results_text.insert("end", f"{param}: {value:.4e}\n")
+                self.results_text.insert("end", f"\nCurrent RMSE: {best_rmse:.4e}\n")
+                
+                self.fitting_status.configure(text=f"Iteration {iteration + 1}/{total}")
+                self.root.update()
             
-            # Run fitting workflow
-            model, fit_results, figures = data_fitting_workflow(
+            # Run workflow with callback
+            model, fit_results, figures, Dprime_df, flux_df = data_fitting_workflow(
                 data_path=data_path,
                 pressure=params.get('pressure', None),
                 temperature=params.get('temperature', None),
@@ -439,7 +474,9 @@ class VariableFVTPlugin(ModelPlugin):
                     'mode': fitting_params['mode'],
                     'initial_guess': fitting_params['initial_guess'],
                     'bounds': fitting_params['bounds'],
-                    'n_starts': fitting_params['n_starts']
+                    'n_starts': fitting_params['n_starts'],
+                    'track_fitting_progress': True,  # Enable progress tracking
+                    'progress_callback': progress_callback  # Add callback
                 },
                 output_settings={
                     'display_plots': False,
@@ -449,7 +486,9 @@ class VariableFVTPlugin(ModelPlugin):
             )
             
             # Update progress
-            self.progress.set(1.0)
+            self.fitting_status.configure(text="Generating results...")
+            self.progress.set(0.8)
+            self.root.update()
             
             # Display results
             self.results_text.delete("1.0", "end")
@@ -459,30 +498,24 @@ class VariableFVTPlugin(ModelPlugin):
                 self.results_text.insert("end", f"DT0: {fit_results['DT_0']:.4e}\n")
             self.results_text.insert("end", f"RMSE: {fit_results['rmse']:.4e}\n")
             
-            # Update plot - only normalized flux vs time
-            if 'combined' in figures:
-                # Clear current axis
-                self.ax.clear()
-                
-                # Get the last axes from combined figure (normalized flux vs time)
-                last_ax = figures['combined'].get_axes()[-1]
-                
-                # Copy just the normalized flux vs time plot
-                for line in last_ax.get_lines():
-                    self.ax.plot(line.get_xdata(), line.get_ydata(), 
-                               label=line.get_label())
-                
-                # Set labels and style
-                self.ax.set_xlabel('Time')
-                self.ax.set_ylabel('Normalised Flux')
-                self.ax.legend()
-                self.ax.grid(True)
-                
-                # Update canvas
-                self.canvas.draw()
+            # Clear current axis and plot normalized flux vs time
+            self.ax.clear()
+            plot_norm_flux_over_time(
+                flux_data=flux_df,
+                ax=self.ax,
+                display=False
+            )
+            
+            # Update canvas
+            self.canvas.draw()
+            
+            # Final progress update
+            self.fitting_status.configure(text="Completed")
+            self.progress.set(1.0)
             
         except Exception as e:
             self.show_error(f"Fitting error: {str(e)}")
+            self.fitting_status.configure(text="Error")
             self.progress.set(0)
 
     def generate_manual_results(self):
@@ -508,3 +541,62 @@ class VariableFVTPlugin(ModelPlugin):
         if (base_name in FLOWRATE_DICT):
             self.parameter_entries["flowrate"].delete(0, "end")
             self.parameter_entries["flowrate"].insert(0, str(FLOWRATE_DICT[base_name]))
+
+    def create_base_frame(self, parent, mode_name, model_name):
+        """Create standard frame with Input/Results tabs"""
+        frame = ctk.CTkFrame(parent)
+        
+        # Get reference to root window
+        self.root = parent.winfo_toplevel()  # Add this line
+        
+        # Create tabview for Input and Results
+        self.current_tabview = ctk.CTkTabview(frame)  # Store reference
+        self.current_tabview.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Create tabs
+        input_tab = self.current_tabview.add("Input")
+        results_tab = self.current_tabview.add("Results")
+        
+        # Create scrollable containers for each tab
+        input_scroll = ScrollableFrame(input_tab)
+        input_scroll.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        results_scroll = ScrollableFrame(results_tab)
+        results_scroll.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Title in Input tab
+        ctk.CTkLabel(input_scroll, 
+                    text=f"{model_name} - {mode_name} Mode", 
+                    font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
+        
+        # Create content for each tab
+        self.create_input_content(input_scroll, mode_name)
+        self.create_results_content(results_scroll)
+        
+        return frame
+
+    def create_results_content(self, parent):
+        """Create standard results display"""
+        # Progress frame
+        progress_frame = ctk.CTkFrame(parent)
+        progress_frame.pack(fill="x", pady=5, padx=10)
+        
+        # Fitting status
+        self.fitting_status = ctk.CTkLabel(progress_frame, text="Ready")
+        self.fitting_status.pack(side="left", padx=5)
+        
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(progress_frame)
+        self.progress.pack(side="left", fill="x", expand=True, padx=5)
+        self.progress.set(0)
+        
+        # Results text area
+        self.results_text = ctk.CTkTextbox(parent, height=100)
+        self.results_text.pack(fill="x", pady=5, padx=10)
+        
+        # Plot area
+        self.fig = Figure(figsize=(6, 4))
+        self.ax = self.fig.add_subplot(111)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=parent)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(pady=5)

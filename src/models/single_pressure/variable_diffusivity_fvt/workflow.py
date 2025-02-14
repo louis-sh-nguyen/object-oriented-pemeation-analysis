@@ -363,5 +363,5 @@ def data_fitting_workflow(
                 f.write(f"DT_0: {fit_results['DT_0']:.4e}\n")
                 f.write(f"RMSE: {fit_results['rmse']:.4e}\n")
     
-    return model, fit_results, figures
+    return model, fit_results, figures, Dprime_df, flux_df
 

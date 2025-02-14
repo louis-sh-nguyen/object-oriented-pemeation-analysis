@@ -3,6 +3,8 @@ import customtkinter as ctk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+__all__ = ['ModelPlugin', 'ScrollableFrame']
+
 class ScrollableFrame(ctk.CTkScrollableFrame):
     """Base scrollable frame for all content"""
     def __init__(self, container, *args, **kwargs):
@@ -13,6 +15,9 @@ class ModelPlugin(ABC):
     
     def create_base_frame(self, parent, mode_name, model_name):
         """Create standard frame with Input/Results tabs"""
+        # Get reference to root window
+        self.root = parent.winfo_toplevel()
+        
         frame = ctk.CTkFrame(parent)
         
         # Create tabview for Input and Results
