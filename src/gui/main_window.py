@@ -10,6 +10,9 @@ class PermeationAnalysisApp:
         self.root.title("Permeation Analysis Tool")
         self.root.geometry("1200x700")
 
+        # Setup escape key binding
+        self.root.bind('<Escape>', lambda e: self.root.quit())
+
         # Initialize plugins
         self.plugins = {
             "Constant Diffusivity": ConstantDiffusivityPlugin(),

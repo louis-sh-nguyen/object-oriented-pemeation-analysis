@@ -212,7 +212,7 @@ def test_data_fitting_workflow_D1prime():
     # Turn off warning messages
     # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
-    model, fit_results, figures = data_fitting_workflow(
+    model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
         data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
         pressure=50.0,
         temperature=25.0,
@@ -249,7 +249,7 @@ def test_data_fitting_workflow_D1prime_DT0():
     # Turn off warning messages
     # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
-    model, fit_results, figures = data_fitting_workflow(
+    model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
         data_path='data/single_pressure/S4R4.xlsx',
         pressure=50.0,
         temperature=25.0,
@@ -320,7 +320,7 @@ def fit_all_data(n=None):
             file_output_dir = os.path.join(output_base_dir, file[:-5])
             
             # Run workflow for this file
-            model, fit_results, figures = data_fitting_workflow(
+            model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
                 data_path=data_path,
                 pressure=pressure,
                 temperature=temperature,

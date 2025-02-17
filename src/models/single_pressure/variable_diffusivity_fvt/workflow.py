@@ -31,7 +31,7 @@ DEFAULT_OUTPUT_SETTINGS = {
 
 # New default fitting settings constant
 DEFAULT_FITTING_SETTINGS = {
-    'mode': 'd1',         # 'd1' or 'both'
+    'mode': 'D1',         # 'D1' or 'both'
     'initial_guess': 5.0,   # 5.0 or (5.0, 1e-7) when mode is 'both'
     'bounds': (1.001, 20),  # or ((1.001, 20), (1e-7, 1e-5))
     'n_starts': 1,
@@ -271,7 +271,9 @@ def data_fitting_workflow(
     
     # Validate fitting mode
     valid_modes = ['D1', 'both']
-    if final_fitting_settings and 'mode' in final_fitting_settings and final_fitting_settings['mode'].lower() not in valid_modes:
+    if final_fitting_settings and 'mode' not in final_fitting_settings:
+        raise ValueError("Fitting settings must include 'mode'.")
+    if final_fitting_settings and final_fitting_settings['mode'] not in valid_modes:
         raise ValueError(f"Invalid fitting mode: {final_fitting_settings['mode']}. Must be one of {valid_modes}")
     
     # Initialize model with initial parameters
@@ -363,5 +365,5 @@ def data_fitting_workflow(
                 f.write(f"DT_0: {fit_results['DT_0']:.4e}\n")
                 f.write(f"RMSE: {fit_results['rmse']:.4e}\n")
     
-    return model, fit_results, figures, Dprime_df, flux_df
+    return model, fit_results, figures, Dprime_df, flux_df, processed_exp_data
 

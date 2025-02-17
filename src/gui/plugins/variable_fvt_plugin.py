@@ -11,6 +11,12 @@ from src.utils.defaults import (
 )
 from src.models.single_pressure.variable_diffusivity_fvt.workflow import data_fitting_workflow
 from src.models.single_pressure.variable_diffusivity_fvt.plotting import plot_norm_flux_over_time
+from src.models.single_pressure.variable_diffusivity_fvt.plotting import (
+    plot_diffusivity_profile,
+    plot_diffusivity_location_profile,
+    plot_norm_flux_over_time,
+    plot_norm_flux_over_tau
+)
 
 class VariableFVTPlugin(ModelPlugin):
     def __init__(self):
@@ -367,7 +373,7 @@ class VariableFVTPlugin(ModelPlugin):
         n_starts = int(self.n_starts.get())
         
         # Convert UI mode selection to model's mode values
-        model_mode = 'D1' if mode == "D1 Prime Only" else 'both'
+        model_mode = 'D1' if mode == 'D1 Prime Only' else 'both'
         
         params = {
             'n_starts': n_starts,
@@ -408,7 +414,10 @@ class VariableFVTPlugin(ModelPlugin):
         self.results_text.insert("1.0", "Starting fitting process...\n")
         self.fitting_status.configure(text="Initializing...")
         self.progress.set(0)
-        self.ax.clear()
+        
+        # Clear all subplot axes
+        for ax in self.axes.values():
+            ax.clear()
         self.canvas.draw()
         
         # Update UI
@@ -460,7 +469,7 @@ class VariableFVTPlugin(ModelPlugin):
                 self.root.update()
             
             # Run workflow with callback
-            model, fit_results, figures, Dprime_df, flux_df = data_fitting_workflow(
+            model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
                 data_path=data_path,
                 pressure=params.get('pressure', None),
                 temperature=params.get('temperature', None),
@@ -498,15 +507,51 @@ class VariableFVTPlugin(ModelPlugin):
                 self.results_text.insert("end", f"DT0: {fit_results['DT_0']:.4e}\n")
             self.results_text.insert("end", f"RMSE: {fit_results['rmse']:.4e}\n")
             
-            # Clear current axis and plot normalized flux vs time
-            self.ax.clear()
-            plot_norm_flux_over_time(
-                flux_data=flux_df,
-                ax=self.ax,
+            # Clear current figure
+            self.fig.clear()
+            
+            # Recreate subplot axes
+            self.axes = {
+                'diffusivity_profile': self.fig.add_subplot(221),
+                'diffusivity_location': self.fig.add_subplot(222),
+                'flux_time': self.fig.add_subplot(223),
+                'flux_tau': self.fig.add_subplot(224)
+            }
+            
+            # Plot diffusivity profile
+            plot_diffusivity_profile(
+                diffusivity_profile=Dprime_df,
+                ax=self.axes['diffusivity_profile'],
                 display=False
             )
             
-            # Update canvas
+            # Plot diffusivity location profile
+            plot_diffusivity_location_profile(
+                diffusivity_profile=Dprime_df,
+                L=params['thickness'],  # Convert mm to cm
+                T=flux_df['time'].max(),
+                ax=self.axes['diffusivity_location'],
+                display=False
+            )
+            
+            # Plot flux over time
+            plot_norm_flux_over_time(
+                flux_data=flux_df,
+                experimental_data=processed_exp_data,
+                ax=self.axes['flux_time'],
+                display=False
+            )
+            
+            # Plot normalized flux over tau
+            plot_norm_flux_over_tau(
+                flux_data=flux_df,
+                experimental_data=processed_exp_data,
+                ax=self.axes['flux_tau'],
+                display=False
+            )
+            
+            # Adjust layout and update canvas
+            self.fig.tight_layout()
             self.canvas.draw()
             
             # Final progress update
@@ -547,22 +592,19 @@ class VariableFVTPlugin(ModelPlugin):
         frame = ctk.CTkFrame(parent)
         
         # Get reference to root window
-        self.root = parent.winfo_toplevel()  # Add this line
+        self.root = parent.winfo_toplevel()
         
         # Create tabview for Input and Results
-        self.current_tabview = ctk.CTkTabview(frame)  # Store reference
+        self.current_tabview = ctk.CTkTabview(frame)
         self.current_tabview.pack(fill="both", expand=True, padx=10, pady=10)
         
         # Create tabs
         input_tab = self.current_tabview.add("Input")
         results_tab = self.current_tabview.add("Results")
         
-        # Create scrollable containers for each tab
+        # Create scrollable container for input tab only
         input_scroll = ScrollableFrame(input_tab)
         input_scroll.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        results_scroll = ScrollableFrame(results_tab)
-        results_scroll.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Title in Input tab
         ctk.CTkLabel(input_scroll, 
@@ -571,7 +613,7 @@ class VariableFVTPlugin(ModelPlugin):
         
         # Create content for each tab
         self.create_input_content(input_scroll, mode_name)
-        self.create_results_content(results_scroll)
+        self.create_results_content(results_tab)  # Pass results_tab directly
         
         return frame
 
@@ -590,13 +632,38 @@ class VariableFVTPlugin(ModelPlugin):
         self.progress.pack(side="left", fill="x", expand=True, padx=5)
         self.progress.set(0)
         
-        # Results text area
+        # Results text area with fixed height
         self.results_text = ctk.CTkTextbox(parent, height=100)
         self.results_text.pack(fill="x", pady=5, padx=10)
         
-        # Plot area
-        self.fig = Figure(figsize=(6, 4))
-        self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=parent)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(pady=5)
+        # Create plot frame that will expand
+        plot_frame = ctk.CTkFrame(parent)
+        plot_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Create a figure with 2x2 subplots
+        self.fig = Figure(figsize=(12, 10))
+        self.axes = {
+            'diffusivity_profile': self.fig.add_subplot(221),
+            'diffusivity_location': self.fig.add_subplot(222),
+            'flux_time': self.fig.add_subplot(223),
+            'flux_tau': self.fig.add_subplot(224)
+        }
+        
+        # Create canvas in plot frame with expand=True
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill="both", expand=True)
+        
+        # Configure plot frame grid weights
+        plot_frame.grid_columnconfigure(0, weight=1)
+        plot_frame.grid_rowconfigure(0, weight=1)
+        
+        # Add resize event handler
+        def on_resize(event):
+            # Update figure size to match frame size
+            w, h = event.width, event.height
+            self.fig.set_size_inches(w/self.fig.get_dpi(), h/self.fig.get_dpi())
+            self.fig.tight_layout()
+            self.canvas.draw()
+        
+        canvas_widget.bind('<Configure>', on_resize)

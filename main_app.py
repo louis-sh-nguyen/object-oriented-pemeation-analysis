@@ -8,6 +8,10 @@ def main():
     
     # Create and run application
     app = PermeationAnalysisApp()
+    
+    # Display hint about escape key
+    print("Press ESC to exit the application")
+    
     app.run()
 
 if __name__ == "__main__":
