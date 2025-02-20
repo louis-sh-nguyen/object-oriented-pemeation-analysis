@@ -6,6 +6,7 @@ from ....utils.plotting import set_style
 
 def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
                              ax: Optional[plt.Axes] = None,
+                             fig: Optional[plt.Figure] = None,
                              save_path: Optional[str] = None,
                              display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -17,6 +18,8 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
         Diffusivity profile data
     ax : plt.Axes, optional
         Matplotlib axes for plotting
+    fig : plt.Figure, optional
+        Matplotlib figure for plotting
     save_path : str, optional
         Path to save the figure
     display : bool, optional
@@ -24,7 +27,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     """
     if ax is None:
         fig, ax = plt.subplots()
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -35,7 +38,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
     Z = diffusivity_profile.values
     
     cf = ax.contourf(X, Y, Z, levels=20, cmap='viridis')
-    plt.colorbar(cf, ax=ax, label='Diffusion Coefficient / cm² s⁻¹')
+    fig.colorbar(cf, ax=ax, label='Diffusion Coefficient / cm² s⁻¹')
     
     ax.set_xlabel('Position / cm')
     ax.set_ylabel('Time / s')
@@ -56,6 +59,7 @@ def plot_diffusivity_profile(diffusivity_profile: pd.DataFrame,
 def plot_norm_flux_over_time(flux_data: pd.DataFrame,
                        experimental_data: Optional[pd.DataFrame] = None,
                        ax: Optional[plt.Axes] = None,
+                       fig: Optional[plt.Figure] = None,
                        save_path: Optional[str] = None,
                        display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -69,6 +73,8 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
         Experimental flux data
     ax : plt.Axes, optional
         Matplotlib axes for plotting
+    fig : plt.Figure, optional
+        Matplotlib figure for plotting
     save_path : str, optional
         Path to save the figure
     display : bool, optional
@@ -80,7 +86,7 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
     
     if ax is None:
         fig, ax = plt.subplots()
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -113,6 +119,7 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
 def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
                             experimental_data: Optional[pd.DataFrame] = None,
                             ax: Optional[plt.Axes] = None,
+                            fig: Optional[plt.Figure] = None,
                             save_path: Optional[str] = None,
                             display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -126,6 +133,8 @@ def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
         Experimental flux data
     ax : plt.Axes, optional
         Matplotlib axes for plotting
+    fig : plt.Figure, optional
+        Matplotlib figure for plotting
     save_path : str, optional
         Path to save the figure
     display : bool, optional
@@ -137,7 +146,7 @@ def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
     
     if ax is None:
         fig, ax = plt.subplots()
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -170,6 +179,7 @@ def plot_norm_flux_over_tau(flux_data: pd.DataFrame,
 def plot_norm_flux_over_time(flux_data: pd.DataFrame,
                            experimental_data: Optional[pd.DataFrame] = None,
                            ax: Optional[plt.Axes] = None,
+                           fig: Optional[plt.Figure] = None,
                            save_path: Optional[str] = None,
                            display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -183,6 +193,8 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
         Experimental flux data
     ax : plt.Axes, optional
         Matplotlib axes for plotting
+    fig : plt.Figure, optional
+        Matplotlib figure for plotting
     save_path : str, optional
         Path to save the figure
     display : bool, optional
@@ -194,7 +206,7 @@ def plot_norm_flux_over_time(flux_data: pd.DataFrame,
     
     if ax is None:
         fig, ax = plt.subplots()
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -226,6 +238,7 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
                                       L: float,
                                       T: float,
                                       ax: Optional[plt.Axes] = None,
+                                      fig: Optional[plt.Figure] = None,
                                       save_path: Optional[str] = None,
                                       display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -241,6 +254,8 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
         Total time [s]
     ax : plt.Axes, optional
         Matplotlib axes for plotting
+    fig : plt.Figure, optional
+        Matplotlib figure for plotting
     save_path : str, optional
         Path to save the figure
     display : bool, optional
@@ -248,7 +263,7 @@ def plot_diffusivity_location_profile(diffusivity_profile: pd.DataFrame,
     """
     if ax is None:
         fig, ax = plt.subplots()
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
