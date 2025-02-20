@@ -2,105 +2,27 @@ import os
 import customtkinter as ctk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from . import ModelPlugin, ScrollableFrame  # Add ScrollableFrame to import
-from src.utils.defaults import (
-    DEFAULTS,
-    THICKNESS_DICT,
-    FLOWRATE_DICT,
-    FVT_FITTING_DEFAULTS
-)
-from src.models.single_pressure.variable_diffusivity_fvt.workflow import manual_workflow, data_fitting_workflow
-from src.models.single_pressure.variable_diffusivity_fvt.plotting import plot_norm_flux_over_time
-from src.models.single_pressure.variable_diffusivity_fvt.plotting import (
-    plot_diffusivity_profile,
-    plot_diffusivity_location_profile,
-    plot_norm_flux_over_time,
-    plot_norm_flux_over_tau
-)
+from . import ModelPlugin, ModeFrame
+from src.utils.defaults import DEFAULTS, THICKNESS_DICT, FLOWRATE_DICT, FVT_FITTING_DEFAULTS
 
-class VariableFVTPlugin(ModelPlugin):
-    def __init__(self):
+class VariableFVTManual(ModeFrame):
+    def __init__(self, parent):
+        # Initialize instance variables before parent's __init__
         self.parameter_entries = {}
-        self.data_dir = os.path.join("data", "single_pressure")
-        self.current_tabview = None
-        self.root = None
-        # Initialize these attributes at class level
-        self.axes = None
-        self.fig = None
-        self.canvas = None
-        self.results_text = None
+        self.status_label = None
         self.progress = None
-        self.fitting_status = None
-
-    def get_data_files(self):
-        """Get list of Excel files in data directory"""
-        try:
-            files = [f for f in os.listdir(self.data_dir) 
-                    if f.endswith(('.xlsx', '.xls'))]
-            return files
-        except Exception as e:
-            print(f"Error reading data directory: {e}")
-            return []
-
-    def create_parameter_frame(self, parent):
-        """Create a frame containing all parameter inputs with default values"""
-        param_frame = ctk.CTkFrame(parent)
-        param_frame.pack(fill="x", padx=10, pady=5)
+        self.results_text = None
+        self.fig = None
+        self.axes = None
+        self.canvas = None
         
-        # Parameter definitions with default values
-        parameters = [
-            ("Required Parameters", [
-                ("thickness", "Thickness (mm)", True, str(DEFAULTS["thickness"])),
-                ("diameter", "Diameter (cm)", True, str(DEFAULTS["diameter"])),
-                ("flowrate", "Flow Rate (cm³/min)", True, str(DEFAULTS["flowrate"])),
-            ]), 
-            ("Optional Parameters", [
-                ("pressure", "Pressure (bar)", False, ""),
-                ("temperature", "Temperature (°C)", False, ""),
-                ("D1_prime", "D1 Prime", False, ""),
-                ("DT0", "DT0", False, "")
-            ])
-        ]
+        # Call parent's __init__ after initializing our variables
+        super().__init__(parent, "Manual", "Variable FVT")
         
-        # Create sections for required and optional parameters
-        for section_title, params in parameters:
-            # Section title
-            ctk.CTkLabel(param_frame, 
-                        text=section_title,
-                        font=ctk.CTkFont(weight="bold")).pack(pady=5)
-            
-            # Parameters grid
-            for param_name, param_label, required, default_value in params:
-                param_row = ctk.CTkFrame(param_frame)
-                param_row.pack(fill="x", padx=5, pady=2)
-                
-                # Label
-                label_text = f"{param_label}{'*' if required else ''}"
-                ctk.CTkLabel(param_row, text=label_text).pack(side="left", padx=5)
-                
-                # Entry with default value
-                entry = ctk.CTkEntry(param_row, width=120)
-                if default_value:
-                    entry.insert(0, default_value)
-                entry.pack(side="right", padx=5)
-                
-                # Store entry reference
-                self.parameter_entries[param_name] = entry
-        
-        return param_frame
-
-    def create_manual_frame(self, parent):
-        frame = self.create_base_frame(parent, "Manual", "Variable FVT")
-        return frame
-
-    def create_fitting_frame(self, parent):
-        frame = self.create_base_frame(parent, "Fitting", "Variable FVT")
-        return frame
-
-    def create_input_content(self, parent, mode):
-        """Create input content specific to Variable FVT model"""
+    def setup_input_content(self):
+        """Set up manual mode input tab"""
         # Parameters Box for all inputs
-        params_box = ctk.CTkFrame(parent)
+        params_box = ctk.CTkFrame(self.input_scroll)
         params_box.pack(fill="x", padx=10, pady=5)
         
         # Parameters Box Title
@@ -110,187 +32,101 @@ class VariableFVTPlugin(ModelPlugin):
         # Parameter frame
         self.create_parameter_frame(params_box)
         
-        # Add file selection section if in fitting mode
-        if (mode == "Fitting"):
-            # Separator line
-            separator = ctk.CTkFrame(params_box, height=2)
-            separator.pack(fill="x", padx=20, pady=10)
+        # Generate button
+        ctk.CTkButton(self.input_scroll, 
+                     text="Generate Results",
+                     command=self.calculate_results).pack(pady=10)
+
+    def create_parameter_frame(self, parent):
+        """Create parameter inputs frame"""
+        param_frame = ctk.CTkFrame(parent)
+        param_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Parameter definitions
+        parameters = [
+            ("Required Parameters", [
+                ("thickness", "Thickness (mm)", True, str(DEFAULTS["thickness"])),
+                ("diameter", "Diameter (cm)", True, str(DEFAULTS["diameter"])),
+                ("flowrate", "Flow Rate (cm³/min)", True, str(DEFAULTS["flowrate"])),
+            ]), 
+            ("Optional Parameters", [
+                ("pressure", "Pressure (bar)", False, ""),
+                ("temperature", "Temperature (°C)", False, ""),
+                ("D1_prime", "D1 Prime", False, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"])),
+                ("DT0", "DT0", False, str(FVT_FITTING_DEFAULTS["DT0"]["initial"]))
+            ])
+        ]
+        
+        # Create sections
+        for section_title, params in parameters:
+            # Section title
+            ctk.CTkLabel(param_frame, 
+                        text=section_title,
+                        font=ctk.CTkFont(weight="bold")).pack(pady=5)
             
-            # Add file selection to same box
-            self.create_file_selection(params_box)
-            
-            # Fitting Settings Title
-            ctk.CTkLabel(parent, text="Fitting Settings",
-                        font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10,5))
-            
-            # Fitting Mode Box
-            fitting_box = ctk.CTkFrame(parent)
-            fitting_box.pack(fill="x", padx=10, pady=5)
-            
-            # Add fitting mode and options
-            self.create_fitting_options(fitting_box)
-            
-            # Fitting button
-            ctk.CTkButton(parent, text="Start Fitting", 
-                         command=self.generate_fitting_results).pack(pady=10)
-        else:
-            # Manual mode button
-            ctk.CTkButton(parent, text="Generate Results", 
-                         command=self.generate_manual_results).pack(pady=10)
+            # Parameters
+            for param_name, param_label, required, default_value in params:
+                param_row = ctk.CTkFrame(param_frame)
+                param_row.pack(fill="x", padx=5, pady=2)
+                
+                # Label
+                label_text = f"{param_label}{'*' if required else ''}"
+                ctk.CTkLabel(param_row, text=label_text).pack(side="left", padx=5)
+                
+                # Entry
+                entry = ctk.CTkEntry(param_row, width=120)
+                if default_value:
+                    entry.insert(0, default_value)
+                entry.pack(side="right", padx=5)
+                
+                # Store entry reference
+                self.parameter_entries[param_name] = entry
 
-    def create_file_selection(self, parent):
-        """Create file selection and stabilisation threshold frame"""
-        file_frame = ctk.CTkFrame(parent)
-        file_frame.pack(fill="x", padx=10, pady=5)
+    def setup_results_content(self):
+        """Set up results display"""
+        # Progress frame
+        progress_frame = ctk.CTkFrame(self.results_frame)
+        progress_frame.pack(fill="x", pady=5, padx=10)
         
-        # Title for section
-        ctk.CTkLabel(file_frame, text="Data Selection", 
-                    font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        # Status label
+        self.status_label = ctk.CTkLabel(progress_frame, text="Ready")
+        self.status_label.pack(side="left", padx=5)
         
-        # Data source selection
-        source_frame = ctk.CTkFrame(file_frame)
-        source_frame.pack(fill="x", pady=5)
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(progress_frame)
+        self.progress.pack(side="left", fill="x", expand=True, padx=5)
+        self.progress.set(0)
         
-        # Radio buttons for file source
-        self.file_source = ctk.StringVar(value="preset")
-        ctk.CTkRadioButton(source_frame, text="Preset Files", 
-                          variable=self.file_source, value="preset",
-                          command=self.toggle_file_source).pack(side="left", padx=5)
-        ctk.CTkRadioButton(source_frame, text="Browse", 
-                          variable=self.file_source, value="browse",
-                          command=self.toggle_file_source).pack(side="left", padx=5)
+        # Results text
+        self.results_text = ctk.CTkTextbox(self.results_frame, height=100)
+        self.results_text.pack(fill="x", pady=5, padx=10)
         
-        # File selection container
-        self.file_select_container = ctk.CTkFrame(file_frame)
-        self.file_select_container.pack(fill="x", pady=5)
+        # Plot frame
+        plot_frame = ctk.CTkFrame(self.results_frame)
+        plot_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
-        # Preset files dropdown
-        self.preset_frame = ctk.CTkFrame(self.file_select_container)
-        ctk.CTkLabel(self.preset_frame, text="Select File:").pack(side="left", padx=5)
-        self.file_selector = ctk.CTkComboBox(
-            self.preset_frame,
-            values=self.get_data_files(),
-            width=200,
-            state="readonly"
-        )
-        self.file_selector.pack(side="left", padx=5)
-        ctk.CTkButton(self.preset_frame, text="↻", width=30,
-                     command=self.refresh_files).pack(side="left", padx=5)
+        # Create figure with subplots
+        self.fig = Figure(figsize=(12, 10))
+        self.axes = {
+            'diffusivity_profile': self.fig.add_subplot(221),
+            'diffusivity_location': self.fig.add_subplot(222),
+            'flux_time': self.fig.add_subplot(223),
+            'flux_tau': self.fig.add_subplot(224)
+        }
         
-        # Browse file frame
-        self.browse_frame = ctk.CTkFrame(self.file_select_container)
-        self.file_entry = ctk.CTkEntry(self.browse_frame, width=250)
-        self.file_entry.pack(side="left", padx=5)
-        ctk.CTkButton(self.browse_frame, text="Browse", 
-                     command=self.browse_file).pack(side="left", padx=5)
-
-        # Stabilisation threshold frame
-        stab_frame = ctk.CTkFrame(file_frame)
-        stab_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(stab_frame, text="Stabilisation Threshold:").pack(side="left", padx=5)
-        self.stab_threshold = ctk.CTkEntry(stab_frame, width=100, placeholder_text="0.002")
-        self.stab_threshold.pack(side="left", padx=5)
+        # Create canvas
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill="both", expand=True)
         
-        # Add info tooltip/label
-        ctk.CTkLabel(stab_frame, 
-                    text="(0.005 for breakthrough, 0.002 for full curve)", 
-                    text_color="gray").pack(side="left", padx=5)
-
-        # Show preset frame by default
-        self.preset_frame.pack(fill="x")
-
-        # Add callback for file selection
-        self.file_selector.configure(command=lambda x: self.on_file_selected(x))
-
-        # Set default stabilisation threshold
-        self.stab_threshold.insert(0, "0.002")
-
-    def create_fitting_options(self, parent):
-        """Create fitting options section"""
-        # Create main frame for all fitting options
-        fitting_frame = ctk.CTkFrame(parent)
-        fitting_frame.pack(fill="x", padx=10, pady=5)
-
-        # Main parameters grid frame
-        options_frame = ctk.CTkFrame(fitting_frame)
-        options_frame.pack(fill="x", padx=10, pady=5)
-        options_frame.grid_columnconfigure(1, weight=1)
+        # Add resize handler
+        def on_resize(event):
+            w, h = event.width, event.height
+            self.fig.set_size_inches(w/self.fig.get_dpi(), h/self.fig.get_dpi())
+            self.fig.tight_layout()
+            self.canvas.draw()
         
-        # Fit mode selector at the top
-        row = 0
-        ctk.CTkLabel(options_frame, text="Mode:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
-        self.fit_option = ctk.CTkComboBox(
-            options_frame,
-            values=["D1 Prime Only", "D1 Prime & DT0"],
-            command=self.update_fitting_inputs,
-            state="readonly",
-            width=120
-        )
-        self.fit_option.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
-        self.fit_option.set("D1 Prime Only")
-
-        # D1 Prime bounds
-        row += 1
-        ctk.CTkLabel(options_frame, text="D1 Prime Bounds:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
-        bounds_frame = ctk.CTkFrame(options_frame)
-        bounds_frame.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
-        self.d1_lower = ctk.CTkEntry(bounds_frame, width=100, placeholder_text="Lower")
-        self.d1_lower.pack(side="left", padx=5)
-        ctk.CTkLabel(bounds_frame, text="→").pack(side="left", padx=5)
-        self.d1_upper = ctk.CTkEntry(bounds_frame, width=100, placeholder_text="Upper")
-        self.d1_upper.pack(side="left", padx=5)
-        
-        # D1 Prime initial guess
-        row += 1
-        ctk.CTkLabel(options_frame, text="D1 Prime Initial:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
-        self.d1_initial = ctk.CTkEntry(options_frame, width=100)
-        self.d1_initial.grid(row=row, column=1, sticky="w", padx=5, pady=5)
-        
-        # DT0 bounds (initially hidden)
-        row += 1
-        self.dt0_bounds_label = ctk.CTkLabel(options_frame, text="DT0 Bounds:")
-        self.dt0_bounds_frame = ctk.CTkFrame(options_frame)
-        self.dt0_lower = ctk.CTkEntry(self.dt0_bounds_frame, width=100, placeholder_text="Lower")
-        self.dt0_lower.pack(side="left", padx=5)
-        ctk.CTkLabel(self.dt0_bounds_frame, text="→").pack(side="left", padx=5)
-        self.dt0_upper = ctk.CTkEntry(self.dt0_bounds_frame, width=100, placeholder_text="Upper")
-        self.dt0_upper.pack(side="left", padx=5)
-        
-        # DT0 initial guess (initially hidden)
-        row += 1
-        self.dt0_initial_label = ctk.CTkLabel(options_frame, text="DT0 Initial:")
-        self.dt0_initial = ctk.CTkEntry(options_frame, width=100)
-        
-        # Number of starts
-        row += 1
-        ctk.CTkLabel(options_frame, text="Number of Starts:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
-        self.n_starts = ctk.CTkEntry(options_frame, width=100)
-        self.n_starts.grid(row=row, column=1, sticky="w", padx=5, pady=5)
-        
-        # Set default values
-        self.d1_lower.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["lower_bound"]))
-        self.d1_upper.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["upper_bound"]))
-        self.d1_initial.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"]))
-        self.dt0_lower.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["lower_bound"]))
-        self.dt0_upper.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["upper_bound"]))
-        self.dt0_initial.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["initial"]))
-        self.n_starts.insert(0, str(FVT_FITTING_DEFAULTS["n_starts"]))
-        
-        # Initial UI state
-        self.update_fitting_inputs("D1 Prime Only")
-
-    def update_fitting_inputs(self, mode):
-        """Update visible fitting inputs based on selected mode"""
-        if mode == "D1 Prime Only":
-            self.dt0_bounds_label.grid_forget()
-            self.dt0_bounds_frame.grid_forget()
-            self.dt0_initial_label.grid_forget()
-            self.dt0_initial.grid_forget()
-        else:
-            self.dt0_bounds_label.grid(row=3, column=0, sticky="w", padx=5, pady=5)
-            self.dt0_bounds_frame.grid(row=3, column=1, sticky="ew", padx=5, pady=5)
-            self.dt0_initial_label.grid(row=4, column=0, sticky="w", padx=5, pady=5)
-            self.dt0_initial.grid(row=4, column=1, sticky="w", padx=5, pady=5)
+        canvas_widget.bind('<Configure>', on_resize)
 
     def get_parameters(self):
         """Get parameters from entries"""
@@ -306,9 +142,292 @@ class VariableFVTPlugin(ModelPlugin):
         return params
 
     def show_error(self, message):
-        """Show error message in results text"""
+        """Show error message"""
         self.results_text.delete("0.0", "end")
         self.results_text.insert("0.0", f"Error: {message}")
+
+    def calculate_results(self):
+        """Execute manual calculation workflow"""
+        self.tabview.set("Results")  # Switch to results tab
+        
+        # Get parameters
+        params = self.get_parameters()
+        if not params:
+            return
+            
+        # Verify required parameters
+        required_params = ['thickness', 'diameter', 'flowrate', 'D1_prime', 'DT0']
+        missing_params = [p for p in required_params if p not in params]
+        if missing_params:
+            self.show_error(f"Missing required parameters: {', '.join(missing_params)}")
+            return
+            
+        # TODO: Add actual calculation logic here
+        self.status_label.configure(text="Calculation complete")
+        self.progress.set(1.0)
+
+class VariableFVTFitting(ModeFrame):
+    def __init__(self, parent):
+        # Initialize instance variables
+        self.parameter_entries = {}
+        self.file_source = None
+        self.file_selector = None
+        self.file_entry = None
+        self.stab_threshold = None
+        self.preset_frame = None
+        self.browse_frame = None
+        self.fit_option = None
+        self.dt0_settings = None
+        self.bounds_entries = {}
+        
+        super().__init__(parent, "Fitting", "Variable FVT")
+
+    def setup_input_content(self):
+        """Set up fitting mode input tab"""
+        # Title and description
+        title_frame = ctk.CTkFrame(self.input_scroll)
+        title_frame.pack(fill="x", padx=10, pady=5)
+        
+        ctk.CTkLabel(title_frame, 
+                    text="Variable Diffusivity Model - Fitting", 
+                    font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
+
+        # Create sections
+        self.create_membrane_params()
+        self.create_experimental_params()
+        self.create_data_selection()
+        self.create_fitting_params()
+        
+        # Fit button
+        ctk.CTkButton(self.input_scroll,
+                     text="Start Fitting",
+                     command=self.start_fitting,
+                     height=40).pack(pady=20)
+
+    def create_membrane_params(self):
+        """Create membrane parameters section"""
+        frame = self.create_section_frame("Membrane Parameters")
+        
+        params = [
+            ("thickness", "Thickness (mm)*", str(DEFAULTS["thickness"])),
+            ("diameter", "Diameter (cm)*", str(DEFAULTS["diameter"]))
+        ]
+        
+        self.create_param_entries(frame, params)
+
+    def create_experimental_params(self):
+        """Create experimental parameters section"""
+        frame = self.create_section_frame("Experimental Parameters")
+        
+        params = [
+            ("flowrate", "Flow Rate (cm³/min)*", str(DEFAULTS["flowrate"])),
+            ("pressure", "Pressure (bar)", ""),
+            ("temperature", "Temperature (°C)", "")
+        ]
+        
+        self.create_param_entries(frame, params)
+
+    def create_data_selection(self):
+        """Create data selection section"""
+        frame = self.create_section_frame("Data Selection")
+        
+        # Data source selection
+        source_frame = ctk.CTkFrame(frame)
+        source_frame.pack(fill="x", pady=5)
+        
+        # Label (right-aligned)
+        label_frame = ctk.CTkFrame(source_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="Data Source:").pack(side="right", padx=5)
+        
+        # Radio buttons
+        buttons_frame = ctk.CTkFrame(source_frame)
+        buttons_frame.pack(side="right", padx=10)
+        
+        self.file_source = ctk.StringVar(value="preset")
+        ctk.CTkRadioButton(buttons_frame, text="Preset", 
+                          variable=self.file_source, value="preset",
+                          command=self.toggle_file_source).pack(side="left", padx=5)
+        ctk.CTkRadioButton(buttons_frame, text="Browse", 
+                          variable=self.file_source, value="browse",
+                          command=self.toggle_file_source).pack(side="left", padx=5)
+        
+        # File selection frames
+        self.preset_frame = self.create_preset_frame(frame)
+        self.browse_frame = self.create_browse_frame(frame)
+        
+        # Stabilisation threshold
+        thresh_frame = ctk.CTkFrame(frame)
+        thresh_frame.pack(fill="x", pady=5)
+        
+        label_frame = ctk.CTkFrame(thresh_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="Stabilisation Threshold:").pack(side="right", padx=5)
+        
+        self.stab_threshold = ctk.CTkEntry(thresh_frame, width=120)
+        self.stab_threshold.insert(0, "0.002")
+        self.stab_threshold.pack(side="right", padx=10)
+
+    def create_fitting_params(self):
+        """Create fitting parameters section"""
+        frame = self.create_section_frame("Fitting Parameters")
+        
+        # Fit mode selection
+        mode_frame = ctk.CTkFrame(frame)
+        mode_frame.pack(fill="x", pady=5)
+        
+        label_frame = ctk.CTkFrame(mode_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="Fitting Mode:").pack(side="right", padx=5)
+        
+        self.fit_option = ctk.CTkComboBox(
+            mode_frame,
+            values=["D1 Prime Only", "D1 Prime & DT0"],
+            command=self.update_fitting_inputs,
+            state="readonly",
+            width=150
+        )
+        self.fit_option.pack(side="right", padx=10)
+        self.fit_option.set("D1 Prime Only")
+        
+        # Create bounds frames
+        self.create_bounds_section(frame, "D1 Prime", 
+                                 FVT_FITTING_DEFAULTS["D1_prime"])
+        
+        # DT0 settings (initially hidden)
+        self.dt0_settings = ctk.CTkFrame(frame)
+        self.create_bounds_section(self.dt0_settings, "DT0", 
+                                 FVT_FITTING_DEFAULTS["DT0"])
+        
+        # Number of starts
+        starts_frame = ctk.CTkFrame(frame)
+        starts_frame.pack(fill="x", pady=5)
+        
+        label_frame = ctk.CTkFrame(starts_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="Number of Starts:").pack(side="right", padx=5)
+        
+        self.n_starts = ctk.CTkEntry(starts_frame, width=120)
+        self.n_starts.insert(0, str(FVT_FITTING_DEFAULTS["n_starts"]))
+        self.n_starts.pack(side="right", padx=10)
+
+    def create_bounds_section(self, parent, name, defaults):
+        """Create parameter bounds and initial value inputs"""
+        # Bounds
+        bounds_frame = ctk.CTkFrame(parent)
+        bounds_frame.pack(fill="x", pady=5)
+        
+        label_frame = ctk.CTkFrame(bounds_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text=f"{name} Bounds:").pack(side="right", padx=5)
+        
+        entry_frame = ctk.CTkFrame(bounds_frame)
+        entry_frame.pack(side="right", padx=10)
+        
+        lower = ctk.CTkEntry(entry_frame, width=80, placeholder_text="Lower")
+        lower.insert(0, str(defaults["lower_bound"]))
+        lower.pack(side="left", padx=2)
+        
+        ctk.CTkLabel(entry_frame, text="→").pack(side="left", padx=2)
+        
+        upper = ctk.CTkEntry(entry_frame, width=80, placeholder_text="Upper")
+        upper.insert(0, str(defaults["upper_bound"]))
+        upper.pack(side="left", padx=2)
+        
+        # Initial value
+        init_frame = ctk.CTkFrame(parent)
+        init_frame.pack(fill="x", pady=2)
+        
+        label_frame = ctk.CTkFrame(init_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text=f"{name} Initial:").pack(side="right", padx=5)
+        
+        initial = ctk.CTkEntry(init_frame, width=120)
+        initial.insert(0, str(defaults["initial"]))
+        initial.pack(side="right", padx=10)
+        
+        # Store references
+        key = name.lower().replace(" ", "")
+        self.bounds_entries[key] = {
+            "lower": lower,
+            "upper": upper,
+            "initial": initial
+        }
+
+    def create_section_frame(self, title):
+        """Create a section frame with title"""
+        section = ctk.CTkFrame(self.input_scroll)
+        section.pack(fill="x", padx=10, pady=5)
+        
+        ctk.CTkLabel(section, text=title,
+                    font=ctk.CTkFont(weight="bold")).pack(pady=5)
+        
+        separator = ctk.CTkFrame(section, height=1)
+        separator.pack(fill="x", padx=10)
+        
+        return section
+
+    def create_param_entries(self, parent, params):
+        """Create parameter entries in a section"""
+        for param_name, label_text, default_value in params:
+            param_row = ctk.CTkFrame(parent)
+            param_row.pack(fill="x", padx=10, pady=5)
+            
+            # Label (right-aligned)
+            label_frame = ctk.CTkFrame(param_row)
+            label_frame.pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(label_frame, text=label_text).pack(side="right", padx=5)
+            
+            # Entry (fixed width)
+            entry = ctk.CTkEntry(param_row, width=120)
+            entry.pack(side="right", padx=10)
+            
+            if default_value:
+                entry.insert(0, default_value)
+                
+            self.parameter_entries[param_name] = entry
+
+    def setup_results_content(self):
+        """Set up fitting mode results tab"""
+        # Add basic results display elements
+        self.results_label = ctk.CTkLabel(self.results_frame, 
+                                        text="No fitting results yet")
+        self.results_label.pack(pady=10)
+        
+        # Add simple plot
+        self.fig = Figure(figsize=(6, 4))
+        self.ax = self.fig.add_subplot(111)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.results_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(pady=10, expand=True, fill="both")
+    
+    def start_fitting(self):
+        """Execute fitting workflow"""
+        # Switch to results tab
+        self.tabview.set("Results")
+        
+        # TODO: Add actual fitting logic here
+        self.results_label.configure(text="Fitting complete")
+
+    def get_data_files(self):
+        """Get list of Excel files in data directory"""
+        data_dir = os.path.join("data", "single_pressure")
+        try:
+            files = [f for f in os.listdir(data_dir) 
+                    if f.endswith(('.xlsx', '.xls'))]
+            return files
+        except Exception as e:
+            print(f"Error reading data directory: {e}")
+            return []
+
+    def toggle_file_source(self):
+        """Toggle between preset files and browse options"""
+        if self.file_source.get() == "preset":
+            self.browse_frame.pack_forget()
+            self.preset_frame.pack(fill="x")
+        else:
+            self.preset_frame.pack_forget()
+            self.browse_frame.pack(fill="x")
 
     def browse_file(self):
         """Open file browser dialog"""
@@ -319,6 +438,62 @@ class VariableFVTPlugin(ModelPlugin):
         if filename:
             self.file_entry.delete(0, "end")
             self.file_entry.insert(0, filename)
+
+    def update_fitting_inputs(self, mode):
+        """Update visible fitting inputs based on selected mode"""
+        if mode == "D1 Prime Only":
+            self.dt0_settings.pack_forget()
+        else:
+            self.dt0_settings.pack(fill="x", pady=5)
+
+    def create_preset_frame(self, parent):
+        """Create frame for preset file selection"""
+        preset_frame = ctk.CTkFrame(parent)
+        preset_frame.pack(fill="x", pady=5)
+        
+        # Label (right-aligned)
+        label_frame = ctk.CTkFrame(preset_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="Preset File:").pack(side="right", padx=5)
+        
+        # Dropdown and refresh button
+        control_frame = ctk.CTkFrame(preset_frame)
+        control_frame.pack(side="right", padx=10)
+        
+        self.file_selector = ctk.CTkComboBox(
+            control_frame,
+            values=self.get_data_files(),
+            width=200,
+            state="readonly"
+        )
+        self.file_selector.pack(side="left", padx=2)
+        
+        ctk.CTkButton(control_frame, text="↻", width=30,
+                     command=self.refresh_files).pack(side="left", padx=2)
+        
+        return preset_frame
+
+    def create_browse_frame(self, parent):
+        """Create frame for file browser"""
+        browse_frame = ctk.CTkFrame(parent)
+        browse_frame.pack(fill="x", pady=5)
+        
+        # Label (right-aligned)
+        label_frame = ctk.CTkFrame(browse_frame)
+        label_frame.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(label_frame, text="File Path:").pack(side="right", padx=5)
+        
+        # Entry and browse button
+        control_frame = ctk.CTkFrame(browse_frame)
+        control_frame.pack(side="right", padx=10)
+        
+        self.file_entry = ctk.CTkEntry(control_frame, width=200)
+        self.file_entry.pack(side="left", padx=2)
+        
+        ctk.CTkButton(control_frame, text="Browse",
+                     command=self.browse_file).pack(side="left", padx=2)
+        
+        return browse_frame
 
     def refresh_files(self):
         """Refresh the list of data files in the dropdown"""
@@ -332,461 +507,11 @@ class VariableFVTPlugin(ModelPlugin):
         elif files:
             self.file_selector.set(files[0])
 
-    def toggle_file_source(self):
-        """Toggle between preset files and browse options"""
-        if self.file_source.get() == "preset":
-            self.browse_frame.pack_forget()
-            self.preset_frame.pack(fill="x")
-        else:
-            self.preset_frame.pack_forget()
-            self.browse_frame.pack(fill="x")
-
-    def get_selected_file(self):
-        """Get the currently selected file path"""
-        if self.file_source.get() == "preset":
-            selected_file = self.file_selector.get()
-            if selected_file:
-                return os.path.join(self.data_dir, selected_file)
-        else:
-            return self.file_entry.get()
-        return None
-
-    def get_fitting_params(self):
-        """Get fitting parameters based on selected mode"""
-        mode = self.fit_option.get()
-        n_starts = int(self.n_starts.get())
-        
-        # Convert UI mode selection to model's mode values
-        model_mode = 'D1' if mode == 'D1 Prime Only' else 'both'
-        
-        params = {
-            'n_starts': n_starts,
-            'mode': model_mode  # Use the converted mode value
-        }
-        
-        # Get bounds and initial point based on mode
-        if model_mode == 'D1':  # Changed condition to match model's mode values
-            params.update({
-                'bounds': (float(self.d1_lower.get()), float(self.d1_upper.get())),
-                'initial_guess': float(self.d1_initial.get())
-            })
-        else:  # mode == 'both'
-            params.update({
-                'bounds': (
-                    (float(self.d1_lower.get()), float(self.d1_upper.get())),
-                    (float(self.dt0_lower.get()), float(self.dt0_upper.get()))
-                ),
-                'initial_guess': (float(self.d1_initial.get()), float(self.dt0_initial.get()))
-            })
-        
-        # Add stabilisation threshold
-        try:
-            stab_threshold = float(self.stab_threshold.get())
-            params['stabilisation_threshold'] = stab_threshold
-        except ValueError:
-            params['stabilisation_threshold'] = 0.002  # Default value
-            
-        return params
-
-    def switch_to_results(self):
-        """Helper method to switch tabs and ensure UI updates"""
-        print("Attempting to switch to Results tab...")
-        
-        # Try multiple times to ensure the switch happens
-        for _ in range(5):  # Try up to 5 times
-            self.current_tabview.set("Results")
-            self.root.update_idletasks()
-            self.root.after(100)  # Wait 100ms
-            self.root.update()
-            
-            # Verify if switch was successful
-            if self.current_tabview.get() == "Results":
-                print("Successfully switched to Results tab")
-                return True
-                
-        print("Failed to switch to Results tab")
-        return False
-
-    def generate_fitting_results(self):
-        """Execute the fitting workflow"""
-        print("Starting fitting calculations...")
-        
-        # Try to switch tabs first
-        if not self.switch_to_results():
-            print("Warning: Tab switch failed")
-            
-        # Clear previous results and show initial status
-        self.results_text.delete("1.0", "end")
-        self.results_text.insert("1.0", "Starting fitting process...\n")
-        self.fitting_status.configure(text="Initialising...")
-        self.progress.set(0)
-        
-        # Clear all subplot axes
-        for ax in self.axes.values():
-            ax.clear()
-        self.canvas.draw()
-        
-        # Update UI
-        self.root.update_idletasks()
-        self.root.update()
-
-        # Get parameters and validate
-        params = self.get_parameters()
-        if not params:
-            return
-            
-        # Get selected file path
-        data_path = self.get_selected_file()
-        if not data_path:
-            self.show_error("Please select a data file")
-            return
-            
-        if not os.path.exists(data_path):
-            self.show_error("Selected data file not found")
-            return
-            
-        # Get fitting parameters
-        try:
-            fitting_params = self.get_fitting_params()
-        except ValueError as e:
-            self.show_error(f"Invalid fitting parameter: {str(e)}")
-            return
-            
-        try:
-            # Run fitting workflow with progress updates
-            self.fitting_status.configure(text="Fitting in progress...")
-            self.progress.set(0.2)
-            self.root.update()
-
-            def progress_callback(iteration, total, best_params, best_rmse):
-                """Callback to update fitting progress"""
-                progress = (iteration + 1) / total
-                self.progress.set(progress)
-                
-                # Update results text with current iteration info
-                self.results_text.delete("1.0", "end")
-                self.results_text.insert("1.0", f"Fitting Progress:\n")
-                self.results_text.insert("end", f"Iteration: {iteration + 1}/{total}\n")
-                self.results_text.insert("end", "\nBest Parameters:\n")
-                for param, value in best_params.items():
-                    self.results_text.insert("end", f"{param}: {value:.4e}\n")
-                self.results_text.insert("end", f"\nCurrent RMSE: {best_rmse:.4e}\n")
-                
-                self.fitting_status.configure(text=f"Iteration {iteration + 1}/{total}")
-                self.root.update()
-            
-            # Run workflow with callback
-            model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
-                data_path=data_path,
-                pressure=params.get('pressure', None),
-                temperature=params.get('temperature', None),
-                thickness=params['thickness'],
-                diameter=params['diameter'],
-                flowrate=params['flowrate'],
-                DT_0=params.get('DT0', 2.87e-7),
-                D1_prime=params.get('D1_prime', 2.0),
-                stabilisation_threshold=fitting_params['stabilisation_threshold'],
-                fitting_settings={
-                    'mode': fitting_params['mode'],
-                    'initial_guess': fitting_params['initial_guess'],
-                    'bounds': fitting_params['bounds'],
-                    'n_starts': fitting_params['n_starts'],
-                    'track_fitting_progress': True,  # Enable progress tracking
-                    'progress_callback': progress_callback  # Add callback
-                },
-                output_settings={
-                    'display_plots': False,
-                    'save_plots': False,
-                    'save_data': False
-                }
-            )
-            
-            # Update progress
-            self.fitting_status.configure(text="Generating results...")
-            self.progress.set(0.8)
-            self.root.update()
-            
-            # Display results
-            self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", "Fitting Results:\n")
-            self.results_text.insert("end", f"D1 Prime: {fit_results['D1_prime']:.4e}\n")
-            if 'DT_0' in fit_results:
-                self.results_text.insert("end", f"DT0: {fit_results['DT_0']:.4e}\n")
-            self.results_text.insert("end", f"RMSE: {fit_results['rmse']:.4e}\n")
-            
-            # Clear current figure
-            self.fig.clear()
-            
-            # Recreate subplot axes
-            self.axes = {
-                'diffusivity_profile': self.fig.add_subplot(221),
-                'diffusivity_location': self.fig.add_subplot(222),
-                'flux_time': self.fig.add_subplot(223),
-                'flux_tau': self.fig.add_subplot(224)
-            }
-            
-            # Plot diffusivity profile
-            plot_diffusivity_profile(
-                diffusivity_profile=Dprime_df,
-                ax=self.axes['diffusivity_profile'],
-                display=False
-            )
-            
-            # Plot diffusivity location profile
-            plot_diffusivity_location_profile(
-                diffusivity_profile=Dprime_df,
-                L=params['thickness'],  # Convert mm to cm
-                T=flux_df['time'].max(),
-                ax=self.axes['diffusivity_location'],
-                display=False
-            )
-            
-            # Plot flux over time
-            plot_norm_flux_over_time(
-                flux_data=flux_df,
-                experimental_data=processed_exp_data,
-                ax=self.axes['flux_time'],
-                display=False
-            )
-            
-            # Plot normalized flux over tau
-            plot_norm_flux_over_tau(
-                flux_data=flux_df,
-                experimental_data=processed_exp_data,
-                ax=self.axes['flux_tau'],
-                display=False
-            )
-            
-            # Adjust layout and update canvas
-            self.fig.tight_layout()
-            self.canvas.draw()
-            
-            # Final progress update
-            self.fitting_status.configure(text="Completed")
-            self.progress.set(1.0)
-            
-        except Exception as e:
-            self.show_error(f"Fitting error: {str(e)}")
-            self.fitting_status.configure(text="Error")
-            self.progress.set(0)
-
-    def generate_manual_results(self):
-        """Generate results in manual mode"""
-        print("Starting manual calculations...")
-        
-        # Try to switch tabs first
-        if not self.switch_to_results():
-            print("Warning: Tab switch failed")
-        
-        # Force UI update after tab switch
-        self.root.update_idletasks()
-        
-        # Clear previous results
-        self.results_text.delete("1.0", "end")
-        self.results_text.insert("1.0", "Generating results...\n")
-        self.fitting_status.configure(text="Initialising...")
-        self.progress.set(0)
-        
-        # Force multiple UI updates
-        self.root.update_idletasks()
-        self.root.update()
-        
-        # Clear all subplot axes
-        self.fig.clear()
-        self.axes = {
-            'diffusivity_profile': self.fig.add_subplot(221),
-            'diffusivity_location': self.fig.add_subplot(222),
-            'flux_time': self.fig.add_subplot(223),
-            'flux_tau': self.fig.add_subplot(224)
-        }
-        self.canvas.draw()
-        
-        # Update UI
-        self.root.update()
-
-        # Get parameters and validate
-        params = self.get_parameters()
-        if not params:
-            return
-            
-        # Verify required parameters
-        required_params = ['thickness', 'diameter', 'flowrate', 'D1_prime', 'DT0']
-        missing_params = [p for p in required_params if p not in params]
-        if missing_params:
-            self.show_error(f"Missing required parameters: {', '.join(missing_params)}")
-            return
-            
-        try:
-            print("Running manual workflow...")
-            
-            # Run manual workflow with correct unpacking
-            model, Dprime_df, flux_df, figures = manual_workflow(
-                pressure=params.get('pressure', 1.0),
-                temperature=params.get('temperature', 25.0),
-                thickness=params['thickness'],
-                diameter=params['diameter'],
-                flowrate=params['flowrate'],
-                D1_prime=params['D1_prime'],
-                DT_0=params['DT0'],
-                simulation_params={
-                    'T': 10e3,  # Specify simulation time
-                    'dx': 0.005,
-                    'X': 1.0
-                },
-                output_settings={
-                    'display_plots': False,
-                    'save_plots': False,
-                    'save_data': False
-                }
-            )
-            
-            print("Workflow completed, plotting results...")
-            
-            # Display results
-            self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", "Manual Calculation Results:\n")
-            self.results_text.insert("end", f"D1 Prime: {params['D1_prime']:.4e}\n")
-            self.results_text.insert("end", f"DT0: {params['DT0']:.4e}\n")
-            
-            # Plot results
-            plot_diffusivity_profile(
-                diffusivity_profile=Dprime_df,
-                ax=self.axes['diffusivity_profile'],
-                display=False
-            )
-            
-            plot_diffusivity_location_profile(
-                diffusivity_profile=Dprime_df,
-                L=params['thickness'],
-                T=flux_df['time'].max(),
-                ax=self.axes['diffusivity_location'],
-                display=False
-            )
-            
-            plot_norm_flux_over_time(
-                flux_data=flux_df,
-                ax=self.axes['flux_time'],
-                display=False
-            )
-            
-            plot_norm_flux_over_tau(
-                flux_data=flux_df,
-                ax=self.axes['flux_tau'],
-                display=False
-            )
-            
-            # Adjust layout and update canvas
-            self.fig.tight_layout()
-            self.canvas.draw()
-            
-            # Final progress update
-            self.fitting_status.configure(text="Completed")
-            self.progress.set(1.0)
-            
-            print("Results display completed")
-            
-        except Exception as e:
-            print(f"Error occurred: {str(e)}")
-            self.show_error(f"Calculation error: {str(e)}")
-            self.fitting_status.configure(text="Error")
-            self.progress.set(0)
-
-    def on_file_selected(self, file_name):
-        """Update thickness and flowrate based on selected file"""
-        # Remove file extension for lookup
-        base_name = os.path.splitext(file_name)[0]
-        
-        # Update thickness if available
-        if (base_name in THICKNESS_DICT):
-            self.parameter_entries["thickness"].delete(0, "end")
-            self.parameter_entries["thickness"].insert(0, str(THICKNESS_DICT[base_name]))
-        
-        # Update flowrate if available
-        if (base_name in FLOWRATE_DICT):
-            self.parameter_entries["flowrate"].delete(0, "end")
-            self.parameter_entries["flowrate"].insert(0, str(FLOWRATE_DICT[base_name]))
-
-    def create_base_frame(self, parent, mode_name, model_name):
-        """Create standard frame with Input/Results tabs"""
-        frame = ctk.CTkFrame(parent)
-        
-        # Get reference to root window
-        self.root = parent.winfo_toplevel()
-        
-        # Create tabview for Input and Results
-        self.current_tabview = ctk.CTkTabview(frame)
-        self.current_tabview.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Create tabs
-        input_tab = self.current_tabview.add("Input")
-        results_tab = self.current_tabview.add("Results")
-        
-        # Create scrollable container for input tab only
-        input_scroll = ScrollableFrame(input_tab)
-        input_scroll.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Title in Input tab
-        ctk.CTkLabel(input_scroll, 
-                    text=f"{model_name} - {mode_name} Mode", 
-                    font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
-        
-        # Create content for each tab
-        self.create_input_content(input_scroll, mode_name)
-        self.create_results_content(results_tab)  # Pass results_tab directly
-        
-        # Ensure UI is properly initialized
-        self.current_tabview.set("Input")
-        self.root.update_idletasks()
-        
-        return frame
-
-    def create_results_content(self, parent):
-        """Create standard results display"""
-        # Progress frame
-        progress_frame = ctk.CTkFrame(parent)
-        progress_frame.pack(fill="x", pady=5, padx=10)
-        
-        # Fitting status
-        self.fitting_status = ctk.CTkLabel(progress_frame, text="Ready")
-        self.fitting_status.pack(side="left", padx=5)
-        
-        # Progress bar
-        self.progress = ctk.CTkProgressBar(progress_frame)
-        self.progress.pack(side="left", fill="x", expand=True, padx=5)
-        self.progress.set(0)
-        
-        # Results text area with fixed height
-        self.results_text = ctk.CTkTextbox(parent, height=100)
-        self.results_text.pack(fill="x", pady=5, padx=10)
-        
-        # Create plot frame that will expand
-        plot_frame = ctk.CTkFrame(parent)
-        plot_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Create a figure with 2x2 subplots
-        self.fig = Figure(figsize=(12, 10))
-        self.axes = {
-            'diffusivity_profile': self.fig.add_subplot(221),
-            'diffusivity_location': self.fig.add_subplot(222),
-            'flux_time': self.fig.add_subplot(223),
-            'flux_tau': self.fig.add_subplot(224)
-        }
-        
-        # Create canvas in plot frame with expand=True
-        self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
-        canvas_widget = self.canvas.get_tk_widget()
-        canvas_widget.pack(fill="both", expand=True)
-        
-        # Configure plot frame grid weights
-        plot_frame.grid_columnconfigure(0, weight=1)
-        plot_frame.grid_rowconfigure(0, weight=1)
-        
-        # Add resize event handler
-        def on_resize(event):
-            # Update figure size to match frame size
-            w, h = event.width, event.height
-            self.fig.set_size_inches(w/self.fig.get_dpi(), h/self.fig.get_dpi())
-            self.fig.tight_layout()
-            self.canvas.draw()
-        
-        canvas_widget.bind('<Configure>', on_resize)
+class VariableFVTPlugin(ModelPlugin):
+    def __init__(self, parent):
+        super().__init__(parent)
+    
+    def setup_frames(self):
+        """Create manual and fitting frames"""
+        self.manual_frame = VariableFVTManual(self.parent)
+        self.fitting_frame = VariableFVTFitting(self.parent)  # Fixed the typo 'fittime' to 'fitting_frame'
