@@ -44,12 +44,12 @@ class VariableFVTManual(ModeFrame):
         
         # Parameter definitions
         parameters = [
-            ("Required Parameters", [
+            ("Required", [
                 ("thickness", "Thickness (mm)", True, str(DEFAULTS["thickness"])),
                 ("diameter", "Diameter (cm)", True, str(DEFAULTS["diameter"])),
                 ("flowrate", "Flow Rate (cm³/min)", True, str(DEFAULTS["flowrate"])),
             ]), 
-            ("Optional Parameters", [
+            ("Optional", [
                 ("pressure", "Pressure (bar)", False, ""),
                 ("temperature", "Temperature (°C)", False, ""),
                 ("D1_prime", "D1 Prime", False, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"])),
@@ -184,19 +184,30 @@ class VariableFVTFitting(ModeFrame):
 
     def setup_input_content(self):
         """Set up fitting mode input tab"""
-        # Title and description
-        title_frame = ctk.CTkFrame(self.input_scroll)
-        title_frame.pack(fill="x", padx=10, pady=5)
+        # Parameters Box for all inputs
+        params_box = ctk.CTkFrame(self.input_scroll)
+        params_box.pack(fill="x", padx=10, pady=5)
         
-        ctk.CTkLabel(title_frame, 
-                    text="Variable Diffusivity Model - Fitting", 
-                    font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
-
-        # Create sections
-        self.create_membrane_params()
-        self.create_experimental_params()
-        self.create_data_selection()
-        self.create_fitting_params()
+        # Parameters Box Title
+        ctk.CTkLabel(params_box, text="Model Parameters", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10,5))
+        
+        # Create parameter frame
+        self.create_parameter_frame(params_box)
+        
+        # Parameters Box Title
+        ctk.CTkLabel(params_box, text="Data Selection", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10,5))
+        
+        # Add file selection section
+        self.create_file_selection(params_box)
+        
+        # Fitting Settings Title
+        ctk.CTkLabel(params_box, text="Fitting Settings", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10,5))
+        
+        # Add fitting options section
+        self.create_fitting_options(params_box)
         
         # Fit button
         ctk.CTkButton(self.input_scroll,
@@ -204,155 +215,214 @@ class VariableFVTFitting(ModeFrame):
                      command=self.start_fitting,
                      height=40).pack(pady=20)
 
-    def create_membrane_params(self):
-        """Create membrane parameters section"""
-        frame = self.create_section_frame("Membrane Parameters")
+    def create_parameter_frame(self, parent):
+        """Create parameter inputs frame"""
+        param_frame = ctk.CTkFrame(parent)
+        param_frame.pack(fill="x", padx=10, pady=5)
         
-        params = [
-            ("thickness", "Thickness (mm)*", str(DEFAULTS["thickness"])),
-            ("diameter", "Diameter (cm)*", str(DEFAULTS["diameter"]))
+        # Parameter definitions
+        parameters = [
+            ("Required", [
+                ("thickness", "Thickness (mm)", True, str(DEFAULTS["thickness"])),
+                ("diameter", "Diameter (cm)", True, str(DEFAULTS["diameter"])),
+                ("flowrate", "Flow Rate (cm³/min)", True, str(DEFAULTS["flowrate"]))
+            ]),
+            ("Optional", [
+                ("pressure", "Pressure (bar)", False, ""),
+                ("temperature", "Temperature (°C)", False, ""),
+                ("D1_prime", "D1 Prime", False, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"])),
+                ("DT0", "DT0", False, str(FVT_FITTING_DEFAULTS["DT0"]["initial"]))
+            ])
         ]
         
-        self.create_param_entries(frame, params)
+        # Create sections
+        for section_title, params in parameters:
+            # Section title
+            ctk.CTkLabel(param_frame, 
+                        text=section_title,
+                        font=ctk.CTkFont(weight="bold")).pack(pady=5)
+            
+            # Parameters
+            for param_name, param_label, required, default_value in params:
+                param_row = ctk.CTkFrame(param_frame)
+                param_row.pack(fill="x", padx=5, pady=2)
+                
+                # Label
+                label_text = f"{param_label}{'*' if required else ''}"
+                ctk.CTkLabel(param_row, text=label_text).pack(side="left", padx=5)
+                
+                # Entry
+                entry = ctk.CTkEntry(param_row, width=120)
+                if default_value:
+                    entry.insert(0, default_value)
+                entry.pack(side="right", padx=5)
+                
+                # Store entry reference
+                self.parameter_entries[param_name] = entry
 
-    def create_experimental_params(self):
-        """Create experimental parameters section"""
-        frame = self.create_section_frame("Experimental Parameters")
-        
-        params = [
-            ("flowrate", "Flow Rate (cm³/min)*", str(DEFAULTS["flowrate"])),
-            ("pressure", "Pressure (bar)", ""),
-            ("temperature", "Temperature (°C)", "")
-        ]
-        
-        self.create_param_entries(frame, params)
+    def create_file_selection(self, parent):
+        """Create file selection and stabilisation threshold frame"""
+        # Define consistent width for file selection controls
+        FILE_SELECT_WIDTH = 250
 
-    def create_data_selection(self):
-        """Create data selection section"""
-        frame = self.create_section_frame("Data Selection")
+        file_frame = ctk.CTkFrame(parent)
+        file_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Title for section
+        # ctk.CTkLabel(file_frame, text="Data Selection", 
+        #             font=ctk.CTkFont(weight="bold")).pack(pady=5)
         
         # Data source selection
-        source_frame = ctk.CTkFrame(frame)
+        source_frame = ctk.CTkFrame(file_frame)
         source_frame.pack(fill="x", pady=5)
         
-        # Label (right-aligned)
-        label_frame = ctk.CTkFrame(source_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="Data Source:").pack(side="right", padx=5)
-        
-        # Radio buttons
-        buttons_frame = ctk.CTkFrame(source_frame)
-        buttons_frame.pack(side="right", padx=10)
-        
+        # Radio buttons for file source
         self.file_source = ctk.StringVar(value="preset")
-        ctk.CTkRadioButton(buttons_frame, text="Preset", 
+        ctk.CTkRadioButton(source_frame, text="Preset Files", 
                           variable=self.file_source, value="preset",
                           command=self.toggle_file_source).pack(side="left", padx=5)
-        ctk.CTkRadioButton(buttons_frame, text="Browse", 
+        ctk.CTkRadioButton(source_frame, text="Browse", 
                           variable=self.file_source, value="browse",
                           command=self.toggle_file_source).pack(side="left", padx=5)
         
-        # File selection frames
-        self.preset_frame = self.create_preset_frame(frame)
-        self.browse_frame = self.create_browse_frame(frame)
+        # File selection container
+        self.file_select_container = ctk.CTkFrame(file_frame)
+        self.file_select_container.pack(fill="x", pady=5)
         
-        # Stabilisation threshold
-        thresh_frame = ctk.CTkFrame(frame)
-        thresh_frame.pack(fill="x", pady=5)
+        # Preset files dropdown
+        self.preset_frame = ctk.CTkFrame(self.file_select_container)
+        ctk.CTkLabel(self.preset_frame, text="Select File:").pack(side="left", padx=5)
+        self.file_selector = ctk.CTkComboBox(
+            self.preset_frame,
+            values=self.get_data_files(),
+            width=FILE_SELECT_WIDTH,
+            state="readonly",
+            command=self.on_file_selected  # Set callback directly
+        )
+        self.file_selector.pack(side="left", padx=5)
+        ctk.CTkButton(self.preset_frame, text="↻", width=30,
+                     command=self.refresh_files).pack(side="left", padx=5)
         
-        label_frame = ctk.CTkFrame(thresh_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="Stabilisation Threshold:").pack(side="right", padx=5)
-        
-        self.stab_threshold = ctk.CTkEntry(thresh_frame, width=120)
-        self.stab_threshold.insert(0, "0.002")
-        self.stab_threshold.pack(side="right", padx=10)
+        # Browse file frame
+        self.browse_frame = ctk.CTkFrame(self.file_select_container)
+        ctk.CTkLabel(self.browse_frame, text="Select File:").pack(side="left", padx=5)
+        self.file_entry = ctk.CTkEntry(
+            self.browse_frame, 
+            width=FILE_SELECT_WIDTH
+        )
+        self.file_entry.pack(side="left", padx=5)
+        ctk.CTkButton(self.browse_frame, text="Browse", 
+                     command=self.browse_file).pack(side="left", padx=5)
 
-    def create_fitting_params(self):
-        """Create fitting parameters section"""
-        frame = self.create_section_frame("Fitting Parameters")
+        # Stabilisation threshold frame
+        stab_frame = ctk.CTkFrame(file_frame)
+        stab_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(stab_frame, text="Stabilisation Threshold:").pack(side="left", padx=5)
+        self.stab_threshold = ctk.CTkEntry(stab_frame, width=100, placeholder_text="0.002")
+        self.stab_threshold.pack(side="left", padx=5)
         
-        # Fit mode selection
-        mode_frame = ctk.CTkFrame(frame)
-        mode_frame.pack(fill="x", pady=5)
+        # Add info tooltip/label
+        ctk.CTkLabel(stab_frame, 
+                    text="(0.005 for breakthrough, 0.002 for full curve)", 
+                    text_color="gray").pack(side="left", padx=5)
+
+        # Show preset frame by default
+        self.preset_frame.pack(fill="x")
+
+        # Set default stabilisation threshold
+        self.stab_threshold.insert(0, "0.002")
+
+    def create_fitting_options(self, parent):
+        """Create fitting options section"""
+        # Create main frame for all fitting options
+        fitting_frame = ctk.CTkFrame(parent)
+        fitting_frame.pack(fill="x", padx=10, pady=5)
+
+        # Main parameters grid frame
+        options_frame = ctk.CTkFrame(fitting_frame)
+        options_frame.pack(fill="x", padx=10, pady=5)
+        options_frame.grid_columnconfigure(1, weight=1)
         
-        label_frame = ctk.CTkFrame(mode_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="Fitting Mode:").pack(side="right", padx=5)
-        
+        row = 0
+        # Fit mode selector
+        ctk.CTkLabel(options_frame, text="Mode:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
         self.fit_option = ctk.CTkComboBox(
-            mode_frame,
+            options_frame,
             values=["D1 Prime Only", "D1 Prime & DT0"],
             command=self.update_fitting_inputs,
             state="readonly",
-            width=150
+            width=120
         )
-        self.fit_option.pack(side="right", padx=10)
+        self.fit_option.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
         self.fit_option.set("D1 Prime Only")
-        
-        # Create bounds frames
-        self.create_bounds_section(frame, "D1 Prime", 
-                                 FVT_FITTING_DEFAULTS["D1_prime"])
-        
-        # DT0 settings (initially hidden)
-        self.dt0_settings = ctk.CTkFrame(frame)
-        self.create_bounds_section(self.dt0_settings, "DT0", 
-                                 FVT_FITTING_DEFAULTS["DT0"])
-        
-        # Number of starts
-        starts_frame = ctk.CTkFrame(frame)
-        starts_frame.pack(fill="x", pady=5)
-        
-        label_frame = ctk.CTkFrame(starts_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="Number of Starts:").pack(side="right", padx=5)
-        
-        self.n_starts = ctk.CTkEntry(starts_frame, width=120)
-        self.n_starts.insert(0, str(FVT_FITTING_DEFAULTS["n_starts"]))
-        self.n_starts.pack(side="right", padx=10)
 
-    def create_bounds_section(self, parent, name, defaults):
-        """Create parameter bounds and initial value inputs"""
-        # Bounds
-        bounds_frame = ctk.CTkFrame(parent)
-        bounds_frame.pack(fill="x", pady=5)
+        # D1 Prime settings
+        row += 1
+        ctk.CTkLabel(options_frame, text="D1 Prime Initial:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        self.d1_initial = ctk.CTkEntry(options_frame, width=100)
+        self.d1_initial.grid(row=row, column=1, sticky="w", padx=5, pady=5)
         
-        label_frame = ctk.CTkFrame(bounds_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text=f"{name} Bounds:").pack(side="right", padx=5)
+        row += 1
+        ctk.CTkLabel(options_frame, text="D1 Prime Bounds:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        d1_bounds_frame = ctk.CTkFrame(options_frame)
+        d1_bounds_frame.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
+        self.d1_lower = ctk.CTkEntry(d1_bounds_frame, width=100, placeholder_text="Lower")
+        self.d1_lower.pack(side="left", padx=5)
+        ctk.CTkLabel(d1_bounds_frame, text="→").pack(side="left", padx=5)
+        self.d1_upper = ctk.CTkEntry(d1_bounds_frame, width=100, placeholder_text="Upper")
+        self.d1_upper.pack(side="left", padx=5)
+
+        # DT0 settings
+        row += 1
+        self.dt0_initial_label = ctk.CTkLabel(options_frame, text="DT0 Initial:")
+        self.dt0_initial_label.grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        self.dt0_initial = ctk.CTkEntry(options_frame, width=100)
+        self.dt0_initial.grid(row=row, column=1, sticky="w", padx=5, pady=5)
         
-        entry_frame = ctk.CTkFrame(bounds_frame)
-        entry_frame.pack(side="right", padx=10)
+        row += 1
+        self.dt0_bounds_label = ctk.CTkLabel(options_frame, text="DT0 Bounds:")
+        self.dt0_bounds_label.grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        self.dt0_bounds_frame = ctk.CTkFrame(options_frame)
+        self.dt0_bounds_frame.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
         
-        lower = ctk.CTkEntry(entry_frame, width=80, placeholder_text="Lower")
-        lower.insert(0, str(defaults["lower_bound"]))
-        lower.pack(side="left", padx=2)
+        self.dt0_lower = ctk.CTkEntry(self.dt0_bounds_frame, width=100, placeholder_text="Lower")
+        self.dt0_lower.pack(side="left", padx=5)
+        ctk.CTkLabel(self.dt0_bounds_frame, text="→").pack(side="left", padx=5)
+        self.dt0_upper = ctk.CTkEntry(self.dt0_bounds_frame, width=100, placeholder_text="Upper")
+        self.dt0_upper.pack(side="left", padx=5)
+
+        # Number of starts
+        row += 1
+        ctk.CTkLabel(options_frame, text="Number of Starts:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        self.n_starts = ctk.CTkEntry(options_frame, width=100)
+        self.n_starts.grid(row=row, column=1, sticky="w", padx=5, pady=5)
         
-        ctk.CTkLabel(entry_frame, text="→").pack(side="left", padx=2)
+        # Set default values
+        self.d1_lower.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["lower_bound"]))
+        self.d1_upper.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["upper_bound"]))
+        self.d1_initial.insert(0, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"]))
+        self.dt0_lower.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["lower_bound"]))
+        self.dt0_upper.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["upper_bound"]))
+        self.dt0_initial.insert(0, str(FVT_FITTING_DEFAULTS["DT0"]["initial"]))
+        self.n_starts.insert(0, str(FVT_FITTING_DEFAULTS["n_starts"]))
         
-        upper = ctk.CTkEntry(entry_frame, width=80, placeholder_text="Upper")
-        upper.insert(0, str(defaults["upper_bound"]))
-        upper.pack(side="left", padx=2)
-        
-        # Initial value
-        init_frame = ctk.CTkFrame(parent)
-        init_frame.pack(fill="x", pady=2)
-        
-        label_frame = ctk.CTkFrame(init_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text=f"{name} Initial:").pack(side="right", padx=5)
-        
-        initial = ctk.CTkEntry(init_frame, width=120)
-        initial.insert(0, str(defaults["initial"]))
-        initial.pack(side="right", padx=10)
-        
-        # Store references
-        key = name.lower().replace(" ", "")
-        self.bounds_entries[key] = {
-            "lower": lower,
-            "upper": upper,
-            "initial": initial
-        }
+        # Initial UI state
+        self.update_fitting_inputs("D1 Prime Only")
+
+    def update_fitting_inputs(self, mode):
+        """Update visible fitting inputs based on selected mode"""
+        if mode == "D1 Prime Only":
+            # Hide DT0 controls
+            self.dt0_initial_label.grid_remove()
+            self.dt0_initial.grid_remove()
+            self.dt0_bounds_label.grid_remove()
+            self.dt0_bounds_frame.grid_remove()
+        else:
+            # Show DT0 controls
+            self.dt0_initial_label.grid()
+            self.dt0_initial.grid()
+            self.dt0_bounds_label.grid()
+            self.dt0_bounds_frame.grid()
 
     def create_section_frame(self, title):
         """Create a section frame with title"""
@@ -367,25 +437,44 @@ class VariableFVTFitting(ModeFrame):
         
         return section
 
-    def create_param_entries(self, parent, params):
-        """Create parameter entries in a section"""
-        for param_name, label_text, default_value in params:
-            param_row = ctk.CTkFrame(parent)
-            param_row.pack(fill="x", padx=10, pady=5)
-            
-            # Label (right-aligned)
-            label_frame = ctk.CTkFrame(param_row)
-            label_frame.pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(label_frame, text=label_text).pack(side="right", padx=5)
-            
-            # Entry (fixed width)
-            entry = ctk.CTkEntry(param_row, width=120)
-            entry.pack(side="right", padx=10)
-            
-            if default_value:
-                entry.insert(0, default_value)
-                
-            self.parameter_entries[param_name] = entry
+    def create_parameter_bounds(self, parent, name, defaults):
+        """Create parameter bounds and initial value inputs"""
+        # Initial value
+        init_row = ctk.CTkFrame(parent)
+        init_row.pack(fill="x", padx=5, pady=2)
+        
+        ctk.CTkLabel(init_row, text=f"{name} Initial:").pack(side="left", padx=5)
+        
+        initial = ctk.CTkEntry(init_row, width=120)
+        initial.insert(0, str(defaults["initial"]))
+        initial.pack(side="right", padx=5)
+        
+        # Bounds
+        bounds_row = ctk.CTkFrame(parent)
+        bounds_row.pack(fill="x", padx=5, pady=2)
+        
+        ctk.CTkLabel(bounds_row, text=f"{name} Bounds:").pack(side="left", padx=5)
+        
+        bounds_entry = ctk.CTkFrame(bounds_row)
+        bounds_entry.pack(side="right", padx=5)
+        
+        lower = ctk.CTkEntry(bounds_entry, width=80, placeholder_text="Lower")
+        lower.insert(0, str(defaults["lower_bound"]))
+        lower.pack(side="left", padx=2)
+        
+        ctk.CTkLabel(bounds_entry, text="→").pack(side="left", padx=2)
+        
+        upper = ctk.CTkEntry(bounds_entry, width=80, placeholder_text="Upper")
+        upper.insert(0, str(defaults["upper_bound"]))
+        upper.pack(side="left", padx=2)
+        
+        # Store references
+        key = name.lower().replace(" ", "")
+        self.bounds_entries[key] = {
+            "lower": lower,
+            "upper": upper,
+            "initial": initial
+        }
 
     def setup_results_content(self):
         """Set up fitting mode results tab"""
@@ -439,26 +528,14 @@ class VariableFVTFitting(ModeFrame):
             self.file_entry.delete(0, "end")
             self.file_entry.insert(0, filename)
 
-    def update_fitting_inputs(self, mode):
-        """Update visible fitting inputs based on selected mode"""
-        if mode == "D1 Prime Only":
-            self.dt0_settings.pack_forget()
-        else:
-            self.dt0_settings.pack(fill="x", pady=5)
-
     def create_preset_frame(self, parent):
         """Create frame for preset file selection"""
-        preset_frame = ctk.CTkFrame(parent)
-        preset_frame.pack(fill="x", pady=5)
+        preset_row = ctk.CTkFrame(parent)
         
-        # Label (right-aligned)
-        label_frame = ctk.CTkFrame(preset_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="Preset File:").pack(side="right", padx=5)
+        ctk.CTkLabel(preset_row, text="Preset File:").pack(side="left", padx=5)
         
-        # Dropdown and refresh button
-        control_frame = ctk.CTkFrame(preset_frame)
-        control_frame.pack(side="right", padx=10)
+        control_frame = ctk.CTkFrame(preset_row)
+        control_frame.pack(side="right", padx=5)
         
         self.file_selector = ctk.CTkComboBox(
             control_frame,
@@ -471,21 +548,16 @@ class VariableFVTFitting(ModeFrame):
         ctk.CTkButton(control_frame, text="↻", width=30,
                      command=self.refresh_files).pack(side="left", padx=2)
         
-        return preset_frame
+        return preset_row
 
     def create_browse_frame(self, parent):
         """Create frame for file browser"""
-        browse_frame = ctk.CTkFrame(parent)
-        browse_frame.pack(fill="x", pady=5)
+        browse_row = ctk.CTkFrame(parent)
         
-        # Label (right-aligned)
-        label_frame = ctk.CTkFrame(browse_frame)
-        label_frame.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(label_frame, text="File Path:").pack(side="right", padx=5)
+        ctk.CTkLabel(browse_row, text="File Path:").pack(side="left", padx=5)
         
-        # Entry and browse button
-        control_frame = ctk.CTkFrame(browse_frame)
-        control_frame.pack(side="right", padx=10)
+        control_frame = ctk.CTkFrame(browse_row)
+        control_frame.pack(side="right", padx=5)
         
         self.file_entry = ctk.CTkEntry(control_frame, width=200)
         self.file_entry.pack(side="left", padx=2)
@@ -493,7 +565,7 @@ class VariableFVTFitting(ModeFrame):
         ctk.CTkButton(control_frame, text="Browse",
                      command=self.browse_file).pack(side="left", padx=2)
         
-        return browse_frame
+        return browse_row
 
     def refresh_files(self):
         """Refresh the list of data files in the dropdown"""
@@ -506,6 +578,41 @@ class VariableFVTFitting(ModeFrame):
             self.file_selector.set(current)
         elif files:
             self.file_selector.set(files[0])
+
+    def on_file_selected(self, file_name):
+        """Update thickness, diameter and flowrate based on selected file"""
+        if not file_name:  # Skip if no file selected
+            return
+            
+        print(f"Selected file: {file_name}")  # Debug print
+            
+        # Remove file extension for lookup
+        base_name = os.path.splitext(file_name)[0]
+        print(f"Base name: {base_name}")  # Debug print
+        
+        try:
+            # Update thickness if available
+            if base_name in THICKNESS_DICT:
+                thickness = THICKNESS_DICT[base_name]
+                print(f"Setting thickness to: {thickness}")  # Debug print
+                self.parameter_entries["thickness"].delete(0, "end")
+                self.parameter_entries["thickness"].insert(0, str(thickness))
+            
+            # Update flowrate if available
+            if base_name in FLOWRATE_DICT:
+                flowrate = FLOWRATE_DICT[base_name]
+                print(f"Setting flowrate to: {flowrate}")  # Debug print
+                self.parameter_entries["flowrate"].delete(0, "end")
+                self.parameter_entries["flowrate"].insert(0, str(flowrate))
+                
+            # Default diameter remains constant
+            self.parameter_entries["diameter"].delete(0, "end")
+            self.parameter_entries["diameter"].insert(0, str(DEFAULTS["diameter"]))
+            
+            self.update_idletasks()  # Force GUI update
+            
+        except Exception as e:
+            print(f"Error updating parameters: {e}")  # Debug print
 
 class VariableFVTPlugin(ModelPlugin):
     def __init__(self, parent):
