@@ -29,7 +29,8 @@ class PermeationAnalysisApp:
 
     def _create_sidebar(self):
         # Create sidebar
-        self.sidebar = ctk.CTkFrame(self.root, width=250, corner_radius=0)
+        self.sidebar = ctk.CTkFrame(self.root, width=200, corner_radius=0)
+        self.sidebar.pack_propagate(False)  # Prevent resizing
         self.sidebar.pack(side="left", fill="y")
         
         # Title

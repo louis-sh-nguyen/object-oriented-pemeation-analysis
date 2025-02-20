@@ -24,7 +24,7 @@ class ConstantDiffusivityPlugin(ModelPlugin):
             self.create_fitting_options(parent)
             # Fitting button
             ctk.CTkButton(parent, text="Start Fitting", 
-                         command=self.run_fitting).pack(pady=10)
+                         command=self.generate_fitting_results).pack(pady=10)
         else:
             # Manual mode button
             ctk.CTkButton(parent, text="Generate Results", 
@@ -126,7 +126,7 @@ class ConstantDiffusivityPlugin(ModelPlugin):
             self.file_entry.delete(0, "end")
             self.file_entry.insert(0, filename)
 
-    def run_fitting(self):
+    def generate_fitting_results(self):
         """Execute the fitting workflow"""
         params = self.get_parameters()
         if not params:

@@ -9,7 +9,7 @@ from src.utils.defaults import (
     FLOWRATE_DICT,
     FVT_FITTING_DEFAULTS
 )
-from src.models.single_pressure.variable_diffusivity_fvt.workflow import data_fitting_workflow
+from src.models.single_pressure.variable_diffusivity_fvt.workflow import manual_workflow, data_fitting_workflow
 from src.models.single_pressure.variable_diffusivity_fvt.plotting import plot_norm_flux_over_time
 from src.models.single_pressure.variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
@@ -23,7 +23,14 @@ class VariableFVTPlugin(ModelPlugin):
         self.parameter_entries = {}
         self.data_dir = os.path.join("data", "single_pressure")
         self.current_tabview = None
-        self.root = None  # Add this line
+        self.root = None
+        # Initialize these attributes at class level
+        self.axes = None
+        self.fig = None
+        self.canvas = None
+        self.results_text = None
+        self.progress = None
+        self.fitting_status = None
 
     def get_data_files(self):
         """Get list of Excel files in data directory"""
@@ -125,7 +132,7 @@ class VariableFVTPlugin(ModelPlugin):
             
             # Fitting button
             ctk.CTkButton(parent, text="Start Fitting", 
-                         command=self.run_fitting).pack(pady=10)
+                         command=self.generate_fitting_results).pack(pady=10)
         else:
             # Manual mode button
             ctk.CTkButton(parent, text="Generate Results", 
@@ -285,29 +292,6 @@ class VariableFVTPlugin(ModelPlugin):
             self.dt0_initial_label.grid(row=4, column=0, sticky="w", padx=5, pady=5)
             self.dt0_initial.grid(row=4, column=1, sticky="w", padx=5, pady=5)
 
-    def create_results_frame(self, parent):
-        """Create a frame to display results"""
-        results_frame = ctk.CTkFrame(parent)
-        results_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Results text area
-        self.results_text = ctk.CTkTextbox(results_frame, height=100)
-        self.results_text.pack(fill="x", pady=5)
-        
-        # Progress bar
-        self.progress = ctk.CTkProgressBar(results_frame)
-        self.progress.pack(fill="x", pady=5)
-        self.progress.set(0)
-        
-        # Plot area
-        self.fig = Figure(figsize=(6, 4))
-        self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=results_frame)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(pady=5)
-        
-        return results_frame
-
     def get_parameters(self):
         """Get parameters from entries"""
         params = {}
@@ -404,15 +388,37 @@ class VariableFVTPlugin(ModelPlugin):
             
         return params
 
-    def run_fitting(self):
-        """Execute the fitting workflow"""
-        # Switch to Results tab immediately
-        self.current_tabview.set("Results")
+    def switch_to_results(self):
+        """Helper method to switch tabs and ensure UI updates"""
+        print("Attempting to switch to Results tab...")
         
+        # Try multiple times to ensure the switch happens
+        for _ in range(5):  # Try up to 5 times
+            self.current_tabview.set("Results")
+            self.root.update_idletasks()
+            self.root.after(100)  # Wait 100ms
+            self.root.update()
+            
+            # Verify if switch was successful
+            if self.current_tabview.get() == "Results":
+                print("Successfully switched to Results tab")
+                return True
+                
+        print("Failed to switch to Results tab")
+        return False
+
+    def generate_fitting_results(self):
+        """Execute the fitting workflow"""
+        print("Starting fitting calculations...")
+        
+        # Try to switch tabs first
+        if not self.switch_to_results():
+            print("Warning: Tab switch failed")
+            
         # Clear previous results and show initial status
         self.results_text.delete("1.0", "end")
         self.results_text.insert("1.0", "Starting fitting process...\n")
-        self.fitting_status.configure(text="Initializing...")
+        self.fitting_status.configure(text="Initialising...")
         self.progress.set(0)
         
         # Clear all subplot axes
@@ -421,6 +427,7 @@ class VariableFVTPlugin(ModelPlugin):
         self.canvas.draw()
         
         # Update UI
+        self.root.update_idletasks()
         self.root.update()
 
         # Get parameters and validate
@@ -565,12 +572,124 @@ class VariableFVTPlugin(ModelPlugin):
 
     def generate_manual_results(self):
         """Generate results in manual mode"""
+        print("Starting manual calculations...")
+        
+        # Try to switch tabs first
+        if not self.switch_to_results():
+            print("Warning: Tab switch failed")
+        
+        # Force UI update after tab switch
+        self.root.update_idletasks()
+        
+        # Clear previous results
+        self.results_text.delete("1.0", "end")
+        self.results_text.insert("1.0", "Generating results...\n")
+        self.fitting_status.configure(text="Initialising...")
+        self.progress.set(0)
+        
+        # Force multiple UI updates
+        self.root.update_idletasks()
+        self.root.update()
+        
+        # Clear all subplot axes
+        self.fig.clear()
+        self.axes = {
+            'diffusivity_profile': self.fig.add_subplot(221),
+            'diffusivity_location': self.fig.add_subplot(222),
+            'flux_time': self.fig.add_subplot(223),
+            'flux_tau': self.fig.add_subplot(224)
+        }
+        self.canvas.draw()
+        
+        # Update UI
+        self.root.update()
+
+        # Get parameters and validate
         params = self.get_parameters()
         if not params:
             return
             
-        # TODO: Implement actual manual calculation logic
-        pass
+        # Verify required parameters
+        required_params = ['thickness', 'diameter', 'flowrate', 'D1_prime', 'DT0']
+        missing_params = [p for p in required_params if p not in params]
+        if missing_params:
+            self.show_error(f"Missing required parameters: {', '.join(missing_params)}")
+            return
+            
+        try:
+            print("Running manual workflow...")
+            
+            # Run manual workflow with correct unpacking
+            model, Dprime_df, flux_df, figures = manual_workflow(
+                pressure=params.get('pressure', 1.0),
+                temperature=params.get('temperature', 25.0),
+                thickness=params['thickness'],
+                diameter=params['diameter'],
+                flowrate=params['flowrate'],
+                D1_prime=params['D1_prime'],
+                DT_0=params['DT0'],
+                simulation_params={
+                    'T': 10e3,  # Specify simulation time
+                    'dx': 0.005,
+                    'X': 1.0
+                },
+                output_settings={
+                    'display_plots': False,
+                    'save_plots': False,
+                    'save_data': False
+                }
+            )
+            
+            print("Workflow completed, plotting results...")
+            
+            # Display results
+            self.results_text.delete("1.0", "end")
+            self.results_text.insert("1.0", "Manual Calculation Results:\n")
+            self.results_text.insert("end", f"D1 Prime: {params['D1_prime']:.4e}\n")
+            self.results_text.insert("end", f"DT0: {params['DT0']:.4e}\n")
+            
+            # Plot results
+            plot_diffusivity_profile(
+                diffusivity_profile=Dprime_df,
+                ax=self.axes['diffusivity_profile'],
+                display=False
+            )
+            
+            plot_diffusivity_location_profile(
+                diffusivity_profile=Dprime_df,
+                L=params['thickness'],
+                T=flux_df['time'].max(),
+                ax=self.axes['diffusivity_location'],
+                display=False
+            )
+            
+            plot_norm_flux_over_time(
+                flux_data=flux_df,
+                ax=self.axes['flux_time'],
+                display=False
+            )
+            
+            plot_norm_flux_over_tau(
+                flux_data=flux_df,
+                ax=self.axes['flux_tau'],
+                display=False
+            )
+            
+            # Adjust layout and update canvas
+            self.fig.tight_layout()
+            self.canvas.draw()
+            
+            # Final progress update
+            self.fitting_status.configure(text="Completed")
+            self.progress.set(1.0)
+            
+            print("Results display completed")
+            
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            self.show_error(f"Calculation error: {str(e)}")
+            self.fitting_status.configure(text="Error")
+            self.progress.set(0)
 
     def on_file_selected(self, file_name):
         """Update thickness and flowrate based on selected file"""
@@ -614,6 +733,10 @@ class VariableFVTPlugin(ModelPlugin):
         # Create content for each tab
         self.create_input_content(input_scroll, mode_name)
         self.create_results_content(results_tab)  # Pass results_tab directly
+        
+        # Ensure UI is properly initialized
+        self.current_tabview.set("Input")
+        self.root.update_idletasks()
         
         return frame
 

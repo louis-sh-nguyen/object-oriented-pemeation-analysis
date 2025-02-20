@@ -80,7 +80,7 @@ class ModelPlugin(ABC):
         pass
 
     @abstractmethod
-    def run_fitting(self):
+    def generate_fitting_results(self):
         """Execute the fitting workflow"""
         pass
 
