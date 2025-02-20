@@ -49,7 +49,7 @@ class VariableFVTManual(ModeFrame):
         # Generate button
         ctk.CTkButton(self.input_scroll, 
                      text="Generate Results",
-                     command=self.calculate_results).pack(pady=10)
+                     command=self.run_results).pack(pady=10)
 
     def create_parameter_frame(self, parent):
         """Create parameter inputs frame"""
@@ -203,7 +203,7 @@ class VariableFVTManual(ModeFrame):
         self.results_text.delete("0.0", "end")
         self.results_text.insert("0.0", f"Error: {message}")
 
-    def calculate_results(self):
+    def run_results(self):
         """Execute manual calculation workflow"""
         self.tabview.set("Results")  # Switch to results tab
         
@@ -345,7 +345,7 @@ class VariableFVTFitting(ModeFrame):
         # Create parameter frame
         self.create_parameter_frame(params_box)
         
-        # Parameters Box Title
+        # Data Selection Title
         ctk.CTkLabel(params_box, text="Data Selection", 
                     font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10,5))
         
@@ -362,8 +362,7 @@ class VariableFVTFitting(ModeFrame):
         # Fit button
         ctk.CTkButton(self.input_scroll,
                      text="Start Fitting",
-                     command=self.start_fitting,
-                     height=40).pack(pady=20)
+                     command=self.run_results).pack(pady=10)
 
     def create_parameter_frame(self, parent):
         """Create parameter inputs frame"""
@@ -380,7 +379,7 @@ class VariableFVTFitting(ModeFrame):
             ("Optional", [
                 ("pressure", "Pressure (bar)", False, ""),
                 ("temperature", "Temperature (°C)", False, ""),
-                ("D1_prime", "D1 Prime", False, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"])),
+                ("D1_prime", "D1'", False, str(FVT_FITTING_DEFAULTS["D1_prime"]["initial"])),
                 ("DT0", "DT0", False, str(FVT_FITTING_DEFAULTS["DT0"]["initial"]))
             ])
         ]
@@ -498,22 +497,22 @@ class VariableFVTFitting(ModeFrame):
         ctk.CTkLabel(options_frame, text="Mode:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
         self.fit_option = ctk.CTkComboBox(
             options_frame,
-            values=["D1 Prime Only", "D1 Prime & DT0"],
+            values=["D1' Only", "D1' & DT0"],
             command=self.update_fitting_inputs,
             state="readonly",
             width=120
         )
         self.fit_option.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
-        self.fit_option.set("D1 Prime Only")
+        self.fit_option.set("D1' Only")
 
         # D1 Prime settings
         row += 1
-        ctk.CTkLabel(options_frame, text="D1 Prime Initial:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        ctk.CTkLabel(options_frame, text="D1' Initial:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
         self.d1_initial = ctk.CTkEntry(options_frame, width=100)
         self.d1_initial.grid(row=row, column=1, sticky="w", padx=5, pady=5)
         
         row += 1
-        ctk.CTkLabel(options_frame, text="D1 Prime Bounds:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
+        ctk.CTkLabel(options_frame, text="D1' Bounds:").grid(row=row, column=0, sticky="w", padx=5, pady=5)
         d1_bounds_frame = ctk.CTkFrame(options_frame)
         d1_bounds_frame.grid(row=row, column=1, sticky="ew", padx=5, pady=5)
         self.d1_lower = ctk.CTkEntry(d1_bounds_frame, width=100, placeholder_text="Lower")
@@ -557,11 +556,11 @@ class VariableFVTFitting(ModeFrame):
         self.n_starts.insert(0, str(FVT_FITTING_DEFAULTS["n_starts"]))
         
         # Initial UI state
-        self.update_fitting_inputs("D1 Prime Only")
+        self.update_fitting_inputs("D1' Only")
 
     def update_fitting_inputs(self, mode):
         """Update visible fitting inputs based on selected mode"""
-        if mode == "D1 Prime Only":
+        if mode == "D1' Only":
             # Hide DT0 controls
             self.dt0_initial_label.grid_remove()
             self.dt0_initial.grid_remove()
@@ -628,25 +627,226 @@ class VariableFVTFitting(ModeFrame):
 
     def setup_results_content(self):
         """Set up fitting mode results tab"""
-        # Add basic results display elements
-        self.results_label = ctk.CTkLabel(self.results_frame, 
-                                        text="No fitting results yet")
-        self.results_label.pack(pady=10)
+        # Progress frame
+        progress_frame = ctk.CTkFrame(self.results_frame)
+        progress_frame.pack(fill="x", pady=5, padx=10)
         
-        # Add simple plot
-        self.fig = Figure(figsize=(6, 4))
-        self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.results_frame)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(pady=10, expand=True, fill="both")
-    
-    def start_fitting(self):
+        # Status label
+        self.status_label = ctk.CTkLabel(progress_frame, text="Ready")
+        self.status_label.pack(side="left", padx=5)
+        
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(progress_frame)
+        self.progress.pack(side="left", fill="x", expand=True, padx=5)
+        self.progress.set(0)
+        
+        # Results text
+        self.results_text = ctk.CTkTextbox(self.results_frame, height=100)
+        self.results_text.pack(fill="x", pady=5, padx=10)
+        
+        # Plot frame
+        plot_frame = ctk.CTkFrame(self.results_frame)
+        plot_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Create figure with subplots
+        self.fig = Figure(figsize=(12, 10))
+        self.axes = {
+            'diffusivity_profile': self.fig.add_subplot(221),
+            'diffusivity_location': self.fig.add_subplot(222),
+            'flux_time': self.fig.add_subplot(223),
+            'flux_tau': self.fig.add_subplot(224)
+        }
+        
+        # Create canvas
+        self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill="both", expand=True)
+        
+        # Add resize handler
+        def on_resize(event):
+            w, h = event.width, event.height
+            self.fig.set_size_inches(w/self.fig.get_dpi(), h/self.fig.get_dpi())
+            self.fig.tight_layout()
+            self.canvas.draw()
+        
+        canvas_widget.bind('<Configure>', on_resize)
+
+    def run_results(self):
         """Execute fitting workflow"""
-        # Switch to results tab
-        self.tabview.set("Results")
+        self.tabview.set("Results")  # Switch to results tab
         
-        # TODO: Add actual fitting logic here
-        self.results_label.configure(text="Fitting complete")
+        # Get parameters
+        params = self.get_parameters()
+        if not params:
+            return
+        
+        # Get file path
+        if self.file_source.get() == "preset":
+            filename = self.file_selector.get()
+            if not filename:
+                self.show_error("Please select a data file")
+                return
+            data_path = os.path.join("data", "single_pressure", filename)
+        else:
+            data_path = self.file_entry.get()
+            if not data_path:
+                self.show_error("Please select a data file")
+                return
+            
+        # Get stabilisation threshold
+        try:
+            stab_threshold = float(self.stab_threshold.get())
+        except ValueError:
+            self.show_error("Invalid stabilisation threshold value")
+            return
+            
+        # Verify all required parameters
+        required_model_params = ['thickness', 'diameter', 'flowrate']
+        required_sim_params = ['dx']
+        
+        missing_model_params = [p for p in required_model_params if p not in params]
+        missing_sim_params = [p for p in required_sim_params if p not in params['simulation']]
+        
+        if missing_model_params or missing_sim_params:
+            error_msg = []
+            if missing_model_params:
+                error_msg.append(f"Missing model parameters: {', '.join(missing_model_params)}")
+            if missing_sim_params:
+                error_msg.append(f"Missing simulation parameters: {', '.join(missing_sim_params)}")
+            self.show_error("\n".join(error_msg))
+            return
+
+        try:
+            self.status_label.configure(text="Running fitting...")
+            self.progress.set(0.2)
+            
+            # Get fitting mode
+            mode = "both" if self.fit_option.get() == "D1' & DT0" else "D1"
+            
+            # Create fitting settings based on mode
+            if mode == "D1":
+                initial_guess = float(self.d1_initial.get())
+                bounds = (float(self.d1_lower.get()), float(self.d1_upper.get()))
+            else:
+                initial_guess = (float(self.d1_initial.get()), float(self.dt0_initial.get()))
+                bounds = ((float(self.d1_lower.get()), float(self.d1_upper.get())),
+                         (float(self.dt0_lower.get()), float(self.dt0_upper.get())))
+            
+            fitting_settings = {
+                'mode': mode,
+                'initial_guess': initial_guess,
+                'bounds': bounds,
+                'n_starts': int(self.n_starts.get())
+            }
+            
+            # Run fitting workflow
+            model, fit_results, figures, Dprime_df, flux_df, exp_data = data_fitting_workflow(
+                data_path=data_path,
+                pressure=params.get('pressure', 1.0),
+                temperature=params.get('temperature', 25.0),
+                thickness=params['thickness'],
+                diameter=params['diameter'],
+                flowrate=params['flowrate'],
+                DT_0=float(self.dt0_initial.get()),
+                D1_prime=float(self.d1_initial.get()),
+                fitting_settings=fitting_settings,
+                stabilisation_threshold=stab_threshold,
+                output_settings={
+                    'display_plots': False,
+                    'save_plots': False,
+                    'save_data': False
+                }
+            )
+            
+            self.progress.set(0.6)
+            
+            # Clear the entire figure and create new subplots
+            self.fig.clear()
+            self.axes = {
+                'diffusivity_profile': self.fig.add_subplot(221),
+                'diffusivity_location': self.fig.add_subplot(222),
+                'flux_time': self.fig.add_subplot(223),
+                'flux_tau': self.fig.add_subplot(224)
+            }
+            
+            # Display results text
+            self.results_text.delete("1.0", "end")
+            self.results_text.insert("1.0", "Fitting Results:\n")
+            self.results_text.insert("end", f"D1 Prime: {fit_results['D1_prime']:.4e}\n")
+            if 'DT0' in fit_results:
+                self.results_text.insert("end", f"DT0: {fit_results['DT0']:.4e}\n")
+            self.results_text.insert("end", f"RMSE: {fit_results['rmse']:.4e}\n")
+            
+            self.progress.set(0.8)
+            
+            # Plot results in the four subplots with explicit figure reference
+            plot_diffusivity_profile(
+                diffusivity_profile=Dprime_df,
+                ax=self.axes['diffusivity_profile'],
+                fig=self.fig,
+                display=False
+            )
+            
+            plot_diffusivity_location_profile(
+                diffusivity_profile=Dprime_df,
+                L=params['thickness'],
+                T=flux_df['time'].max(),
+                ax=self.axes['diffusivity_location'],
+                fig=self.fig,
+                display=False
+            )
+            
+            plot_norm_flux_over_time(
+                flux_data=flux_df,
+                experimental_data=exp_data,
+                ax=self.axes['flux_time'],
+                fig=self.fig,
+                display=False
+            )
+            
+            plot_norm_flux_over_tau(
+                flux_data=flux_df,
+                experimental_data=exp_data,
+                ax=self.axes['flux_tau'],
+                fig=self.fig,
+                display=False
+            )
+            
+            # Update plot layout and display
+            self.fig.tight_layout()
+            self.canvas.draw()
+            
+            # Final status update
+            self.status_label.configure(text="Complete")
+            self.progress.set(1.0)
+            
+        except Exception as e:
+            self.show_error(f"Fitting error: {str(e)}")
+            self.status_label.configure(text="Error")
+            self.progress.set(0)
+
+    def get_parameters(self):
+        """Get parameters from entries"""
+        params = {}
+        # Get model parameters
+        for name, entry in self.parameter_entries.items():
+            value = entry.get()
+            if value:  # Only include non-empty values
+                try:
+                    params[name] = float(value)
+                except ValueError:
+                    self.show_error(f"Invalid value for {name}")
+                    return None
+        
+        # Add default simulation parameter
+        params['simulation'] = {'dx': 0.005}  # Use fixed dx value
+        
+        return params
+
+    def show_error(self, message):
+        """Show error message"""
+        self.results_text.delete("0.0", "end")
+        self.results_text.insert("0.0", f"Error: {message}")
 
     def get_data_files(self):
         """Get list of Excel files in data directory"""

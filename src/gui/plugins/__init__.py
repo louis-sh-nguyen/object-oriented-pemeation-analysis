@@ -17,9 +17,14 @@ class ModeFrame(ctk.CTkFrame):
         self.mode_name = mode_name
         self.model_name = model_name
         
+        # Add title at the top of the frame (before tabview)
+        ctk.CTkLabel(self, 
+                    text=f"{model_name} - {mode_name} Mode",
+                    font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20,10))
+        
         # Create tabview
         self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
+        self.tabview.pack(fill="both", expand=True, padx=10, pady=(0,10))  # Adjusted top padding
         
         # Create tabs
         self.input_tab = self.tabview.add("Input")
@@ -32,11 +37,6 @@ class ModeFrame(ctk.CTkFrame):
         # Create regular frame for results
         self.results_frame = ctk.CTkFrame(self.results_tab)
         self.results_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Add title
-        ctk.CTkLabel(self.input_scroll, 
-                    text=f"{model_name} - {mode_name} Mode",
-                    font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
         
         # Initialize UI elements
         self.setup_input_content()
