@@ -1,0 +1,32 @@
+permeation_analysis/
+├── src/
+│   ├── data/
+│   │   └── ...
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── constant_diffusivity/  # Constant Diffusivity Model
+│   │   │   ├── model.py       # Model logic
+│   │   │   └── ...            # Other model-specific files
+│   │   ├── variable_fvt/      # Variable FVT Model
+│   │   │   ├── model.py       # Model logic
+│   │   │   └── ...            # Other model-specific files
+│   │   └── ...              # Other models
+│   ├── gui/
+│   │   ├── __init__.py
+│   │   ├── main_app.py           # Main application entry point
+│   │   ├── main_window.py        # Main window class
+│   │   ├── plugins/            # Model plugins
+│   │   │   ├── __init__.py
+│   │   │   ├── constant_diffusivity_plugin.py  # Plugin for Constant Diffusivity
+│   │   │   ├── variable_fvt_plugin.py      # Plugin for Variable FVT
+│   │   │   └── ...            # Other plugins
+│   │   └── ...
+│   ├── utils/
+│   │   └── ...
+├── tests/
+│   └── ...
+├── examples/
+│   └── ...
+├── README.md
+├── requirements.txt
+└── setup.py

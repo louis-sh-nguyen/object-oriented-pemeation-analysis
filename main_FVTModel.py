@@ -212,7 +212,7 @@ def test_data_fitting_workflow_D1prime():
     # Turn off warning messages
     # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
-    model, fit_results, figures = data_fitting_workflow(
+    model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
         data_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
         pressure=50.0,
         temperature=25.0,
@@ -249,7 +249,7 @@ def test_data_fitting_workflow_D1prime_DT0():
     # Turn off warning messages
     # warnings.filterwarnings('ignore')
     # Run workflow (optimization tracking is handled internally)
-    model, fit_results, figures = data_fitting_workflow(
+    model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
         data_path='data/single_pressure/S4R4.xlsx',
         pressure=50.0,
         temperature=25.0,
@@ -261,9 +261,9 @@ def test_data_fitting_workflow_D1prime_DT0():
         stabilisation_threshold=0.002,  # 0.005 for breakthrough curve, 0.002 for whole curve
         fitting_settings={
             'mode': 'both',   # 'D1' or 'both'
-            'initial_guess': (5.0, 1e-7),   # 5.0 or (5.0, 1e-7)
+            'initial_guess': (2.0, 1e-7),   # 5.0 or (5.0, 1e-7)
             'bounds': ((1.001, 20), (1e-8, 1e-6)),  # (1.001, 20) or ((1.001, 20), (1e-7, 1e-5))
-            'n_starts': 3,  # 1, 2, 3 ,...
+            'n_starts': 1,  # 1, 2, 3 ,...
         },
         output_settings={
             'output_dir': 'outputs/fitting',
@@ -288,7 +288,7 @@ def fit_all_data(n=None):
     # Create timestamp-based output directory
     from datetime import datetime
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    output_base_dir = f'outputs/fitting/{timestamp}'
+    output_base_dir = f'outputs/fitting/{timestamp}_fullcurve'
     os.makedirs(output_base_dir, exist_ok=True)
     
     # List all xlsx files in the data directory
@@ -320,7 +320,7 @@ def fit_all_data(n=None):
             file_output_dir = os.path.join(output_base_dir, file[:-5])
             
             # Run workflow for this file
-            model, fit_results, figures = data_fitting_workflow(
+            model, fit_results, figures, Dprime_df, flux_df, processed_exp_data = data_fitting_workflow(
                 data_path=data_path,
                 pressure=pressure,
                 temperature=temperature,
@@ -329,11 +329,11 @@ def fit_all_data(n=None):
                 flowrate=8.0,
                 DT_0=2.8e-7,
                 D1_prime=2.0,
-                stabilisation_threshold=0.005,
+                stabilisation_threshold=0.002,  # 0.005 for breakthrough curve, 0.002 for whole curve
                 fitting_settings={
                     'mode': 'both',
-                    'initial_guess': (2.0, 1e-7),
-                    'bounds': ((1.001, 10), (1e-8, 1e-6)),
+                    'initial_guess': (2.0, 1.0e-7),
+                    'bounds': ((1.001, 20), (1.0e-8, 1.0e-6)),
                     'n_starts': 3,
                 },
                 output_settings={
@@ -380,5 +380,5 @@ if __name__ == '__main__':
     # test_manual_workflow()
     # test_parameter_sensitivity()
     # test_data_fitting_workflow_D1prime()
-    test_data_fitting_workflow_D1prime_DT0()
-    # fit_all_data()
+    # test_data_fitting_workflow_D1prime_DT0()
+    fit_all_data()
