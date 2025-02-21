@@ -1,128 +1,227 @@
 # GUI Design Documentation
 
-## Architecture Overview
-
-The GUI follows a plugin-based architecture with clear separation of concerns:
-
+## Project Structure
 ```
-PermeationAnalysisApp (main_window.py)
-├── Main Window
-│   ├── Sidebar
-│   │   ├── Model Selection
-│   │   └── Settings
-│   └── Main Content Area
-        └── Model Plugins
-            ├── Constant Diffusivity Plugin
-            │   ├── Manual Mode Frame
-            │   └── Fitting Mode Frame
-            └── Variable FVT Plugin
-                ├── Manual Mode Frame
-                └── Fitting Mode Frame
+src/gui_new/
+├── __init__.py
+├── base_frame.py         # ModeFrame base class
+├── base_plugin.py        # ModelPlugin base class
+├── base_scrollable.py    # ScrollableFrame utility
+├── main_window.py        # Main application window
+└── plugins/
+    ├── __init__.py      # Plugin system exports
+    ├── constant_d/      # Constant diffusivity plugin
+    │   ├── __init__.py
+    │   ├── manual.py
+    │   ├── fitting.py
+    │   └── plugin.py
+    └── variable_fvt/     # Variable FVT plugin
+        ├── __init__.py
+        ├── manual.py
+        ├── fitting.py
+        └── plugin.py
 ```
 
 ## Core Components
 
-### 1. Main Application (`main_window.py`)
-- Creates the root window and main layout
-- Manages the sidebar with model selection and settings
-- Loads and coordinates model plugins
-- Handles global settings (UI scaling, theme)
+### Base Classes
+1. ModeFrame (base_frame.py)`)
+   - Base class for all mode frames (Manual/Fitting)
+   - Handles tab management and layout
+   - Abstract methods for content setup
 
-### 2. Plugin System (`plugins/__init__.py`)
-- Defines abstract base classes for plugins and frames
-- `ModelPlugin`: Base class for model implementations
-- `ModeFrame`: Base class for mode-specific frames (Manual/Fitting)
-- `ScrollableFrame`: Utility class for scrollable content
+2. ModelPlugin (base_plugin.py)`)
+   - Base class for model plugins
+   - Manages mode frames
+   - Coordinates frame switching
 
-### 3. Model Plugins
-Each model is implemented as a plugin with two modes:
-- Manual mode: Direct calculation with user inputs
-- Fitting mode: Parameter fitting using experimental data
+3. ScrollableFrame (base_scrollable.py)`)
+   - Utility class for scrollable content
+   - Used in input tabs
 
-## Design Philosophy
+### Plugin System
+The plugin system uses composition over inheritance:
 
-### 1. Single Responsibility
-- Each class has a specific responsibility
-- Clear separation between UI components and business logic
-- Model calculations are delegated to separate workflow modules
+```python
+ModelPlugin
+├── Manual Frame (ModeFrame)
+│   ├── Input Tab (ScrollableFrame)
+│   └── Results Tab
+└── Fitting Frame (ModeFrame)
+    ├── Input Tab (ScrollableFrame)
+    └── Results Tab
+```
 
-### 2. Frame Management
-- Each model-mode combination (e.g., FVT-Manual, FVT-Fitting) is a separate frame
-- Only one frame is visible at a time
-- Frames are created at startup but hidden (`pack_forget`)
-- Switching between frames is handled by the plugin manager
+### Mode Frame Structure
+Each mode frame (Manual/Fitting) follows this layout:
 
-### 3. Tab-based Interface
-Each mode frame contains two tabs:
-1. Input Tab
-   - Collects user inputs via forms
+```
+ModeFrame
+├── Title
+├── Input Tab
+│   ├── Model Parameters
+│   ├── Data Selection (Fitting only)
+│   ├── Simulation Settings (Manual only)
+│   └── Action Button
+└── Results Tab
+    ├── Progress Section
+    ├── Results Text
+    └── Plot Grid
+```
+
+## Workflows
+
+### Manual Mode
+1. Parameter Input
+   - Required/Optional parameters
+   - Simulation settings
    - Input validation
-   - Triggers calculations/fitting
-   - Scrollable for extensive inputs
 
-2. Results Tab
-   - Displays calculation results
-   - Shows plots and data visualization
-   - Updates dynamically when new results are available
-
-### 4. Workflow Integration
-1. User Input Collection
-   - Forms gather necessary parameters
-   - Input validation before processing
-   - Default values and presets available
-
-2. Processing
-   - Input parameters fed into appropriate workflow
-   - Progress tracking during calculations
-   - Error handling and user feedback
+2. Calculation
+   - Direct calculation with given parameters
+   - Progress tracking
+   - Error handling
 
 3. Results Display
-   - Automatic switch to results tab
    - Multiple plot views
-   - Text summary of results
-   - Error messages if calculation fails
+   - Parameter summary
+
+### Fitting Mode
+1. Data Selection
+   - Preset file selection
+   - File browser option
+   - Auto-parameter population
+
+2. Parameter Setup
+   - Model parameters
+   - Fitting settings
+   - Initial values and bounds
+
+3. Fitting Process
+   - Progress tracking
+   - RMSE calculation
+   - Result visualization
 
 ## Implementation Details
 
-### 1. Frame Lifecycle
+### Frame Management
+```python
+class ModelPlugin:
+    def setup_frames(self):
+        self.manual_frame = ManualFrame(self.parent)
+        self.fitting_frame = FittingFrame(self.parent)
+        self.current_frame = None
+
+    def show_mode(self, mode):
+        if self.current_frame:
+            self.current_frame.hide()
+        
+        frame = self.manual_frame if mode == "Manual" else self.fitting_frame
+        frame.show()
+        self.current_frame = frame
 ```
-1. Plugin Initialization
-   ├── Create Manual Frame (hidden)
-   └── Create Fitting Frame (hidden)
+
+## Data Flow
+
+### Component Interaction
+```
+Plugin Manager <──── Main Window ───> Model Selection
+      │                                    │
+      ├── Load Plugin ────────────────────>│
+      │                                    │
+      ├── Initialize Frames ──> Active Frame
+      │                             │
+      └── Manage State              ├── Input Collection
+                                   ├── Validation
+                                   └── Processing
+```
+
+### Data Processing Pipeline
+```
+1. Input Handling
+   User Input ───> Parameter Object ───> Workflow Input
+        │                │
+        └── Validation──┘
+
+2. Processing Stage
+   ├── Model Configuration
+   │      │
+   │      ├── Required Parameters
+   │      └── Optional Parameters
+   │
+   ├── Workflow Execution
+   │      │
+   │      ├── Progress Updates
+   │      └── Error Handling
+   │
+   └── Results Generation
+          │
+          └── Data Models
+              ├── Diffusivity Profile
+              ├── Flux Data
+              └── Fitting Results
+
+3. Output Stage
+   Results ───> Plot Generation ───> Display Update
+      │              │                    │
+      │              └── Four Panel Plot  ├── Progress Bar
+      │                                   ├── Status Text
+      └──────────────────────────────────>└── Results Text
+```
+
+### File Data Flow (Fitting Mode)
+```
+Data Selection
+├── Preset Files Directory
+│     │
+│     └── Excel Files ───> File List ───> ComboBox
+│
+├── File Browser
+│     │
+│     └── Local Files ───> File Path ───> Entry Field
+│
+└── Selected File
+      │
+      ├── Auto Parameter Population
+      │     ├── Thickness
+      │     ├── Flowrate
+      │     └── Default Diameter
+      │
+      └── Data Loading
+            ├── Experimental Data
+            └── Time Series
+```
+
+### User Interface Flow
+```
+1. Model Selection (Sidebar)
+   ├── Load appropriate plugin
+   └── Show default mode
 
 2. Mode Selection
-   ├── Hide current frame (pack_forget)
-   └── Show selected frame (pack)
+   ├── Switch between Manual/Fitting
+   └── Preserve frame states
 
-3. Tab Management
-   ├── Input Tab (ScrollableFrame)
-   └── Results Tab (Regular Frame)
+3. Data Processing
+   ├── Input Collection
+   ├── Validation
+   ├── Processing
+   └── Results Display
 ```
 
-### 2. Data Flow
-```
-User Input → Validation → Workflow Processing → Results Display
-└── Input Tab                                  └── Results Tab
-```
+## Future Enhancements
 
-### 3. State Management
-- Each frame maintains its own state
-- Plugin manages active frame state
-- Main window coordinates between plugins
+1. Plugin Management
+   - Dynamic plugin loading
+   - Plugin configuration system
+   - Plugin dependencies
 
-## Future Considerations
+2. Data Management
+   - Session persistence
+   - Result export options
+   - Data preprocessing tools
 
-1. Extensibility
-   - Easy addition of new model plugins
-   - Consistent interface for all models
-   - Reusable components
-
-2. Performance
-   - Lazy loading of frames
-   - Efficient plot updates
-   - Background processing for long calculations
-
-3. User Experience
-   - Consistent layout across models
-   - Intuitive workflow
-   - Clear feedback and error messages
+3. UI Improvements
+   - Advanced plotting options
+   - Real-time parameter validation
+   - Batch processing support
