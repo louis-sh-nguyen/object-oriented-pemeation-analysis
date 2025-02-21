@@ -1,9 +1,12 @@
 import customtkinter as ctk
 from tkinter import Tk
+from typing import Dict, Optional
 
 class PermeationAnalysisApp:
+    """Main application window"""
+    
     def __init__(self):
-        # Main Window
+        # Main Window setup
         self.root = Tk()
         self.root.title("Permeation Analysis Tool")
         self.root.geometry("1200x700")
@@ -11,13 +14,20 @@ class PermeationAnalysisApp:
         # Setup escape key binding
         self.root.bind('<Escape>', lambda e: self.root.quit())
         
-        # Create main UI elements
+        # Initialize UI components
+        self.sidebar: Optional[ctk.CTkFrame] = None
+        self.main_frame: Optional[ctk.CTkFrame] = None
+        self.model_selector: Optional[ctk.CTkComboBox] = None
+        self.mode_switch: Optional[ctk.CTkSwitch] = None
+        self.theme_switch: Optional[ctk.CTkSwitch] = None
+        
+        # Create UI
         self.create_sidebar()
         self.create_main_content()
         
-        # Initialize state
-        self.current_model = None
-        self.plugins = {}
+        # Initialize plugins
+        self.current_model: Optional[str] = None
+        self.plugins: Dict = {}
         self.load_plugins()
         
         # Show default view
@@ -35,10 +45,8 @@ class PermeationAnalysisApp:
         ctk.CTkLabel(self.sidebar, text="Analyser",
                     font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0,20))
         
-        # Model selection
+        # Controls
         self.create_model_frame()
-        
-        # Settings
         self.create_settings_frame()
     
     def create_model_frame(self):
@@ -71,12 +79,20 @@ class PermeationAnalysisApp:
         frame = ctk.CTkFrame(self.sidebar)
         frame.pack(side="bottom", fill="x", pady=20, padx=5)
         
-        # UI scaling row
-        scaling_row = ctk.CTkFrame(frame)
-        scaling_row.pack(fill="x", pady=5)
-        ctk.CTkLabel(scaling_row, text="UI Scaling:").pack(side="left", padx=5)
+        # UI scaling
+        self.create_scaling_control(frame)
+        
+        # Theme toggle
+        self.create_theme_control(frame)
+    
+    def create_scaling_control(self, parent):
+        """Create UI scaling controls"""
+        row = ctk.CTkFrame(parent)
+        row.pack(fill="x", pady=5)
+        
+        ctk.CTkLabel(row, text="UI Scaling:").pack(side="left", padx=5)
         scaling = ctk.CTkComboBox(
-            scaling_row,
+            row,
             values=["80%", "90%", "100%", "110%", "120%"],
             command=self.update_scaling,
             state="readonly",
@@ -84,13 +100,15 @@ class PermeationAnalysisApp:
         )
         scaling.set("100%")
         scaling.pack(side="right", padx=5)
+    
+    def create_theme_control(self, parent):
+        """Create theme controls"""
+        row = ctk.CTkFrame(parent)
+        row.pack(fill="x", pady=5)
         
-        # Theme toggle row
-        theme_row = ctk.CTkFrame(frame)
-        theme_row.pack(fill="x", pady=5)
-        ctk.CTkLabel(theme_row, text="Theme:").pack(side="left", padx=5)
+        ctk.CTkLabel(row, text="Theme:").pack(side="left", padx=5)
         self.theme_switch = ctk.CTkSwitch(
-            theme_row,
+            row,
             text="Dark Mode",
             command=self.toggle_theme
         )
@@ -104,16 +122,16 @@ class PermeationAnalysisApp:
     
     def load_plugins(self):
         """Load model plugins"""
-        from .plugins.constant_diffusivity_plugin import ConstantDiffusivityPlugin
-        from .plugins.variable_fvt_plugin import VariableFVTPlugin
+        # Import plugins using relative imports
+        from .plugins.constant_diffusivity.plugin import ConstantDiffusivityPlugin
+        from .plugins.variable_fvt.plugin import VariableFVTPlugin
         
         self.plugins = {
             "Constant Diffusivity": ConstantDiffusivityPlugin(self.main_frame),
             "Variable FVT": VariableFVTPlugin(self.main_frame)
         }
     
-    # Event handlers
-    def handle_model_selection(self, model_name):
+    def handle_model_selection(self, model_name: str):
         """Handle model selection"""
         self.show_model(model_name)
     
@@ -123,11 +141,10 @@ class PermeationAnalysisApp:
             mode = "Fitting" if self.mode_switch.get() else "Manual"
             self.plugins[self.current_model].show_mode(mode)
     
-    def show_model(self, model_name):
+    def show_model(self, model_name: str):
         """Switch to selected model"""
-        # Only switch if selecting a different model
         if self.current_model != model_name:
-            # Hide all current frames first
+            # Hide current frames
             for plugin in self.plugins.values():
                 if plugin.current_frame:
                     plugin.current_frame.hide()
@@ -138,7 +155,7 @@ class PermeationAnalysisApp:
                 mode = "Fitting" if self.mode_switch.get() else "Manual"
                 self.plugins[model_name].show_mode(mode)
     
-    def update_scaling(self, value):
+    def update_scaling(self, value: str):
         """Update UI scaling"""
         scaling = int(value.replace('%', '')) / 100
         ctk.set_widget_scaling(scaling)
