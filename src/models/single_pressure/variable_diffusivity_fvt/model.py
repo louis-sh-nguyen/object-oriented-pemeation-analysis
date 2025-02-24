@@ -80,7 +80,7 @@ class FVTModel(PermeationModel):
             R = np.empty(Nx - 2, dtype=np.float64)
             for i in range(1, Nx - 1):
                 lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 # Laplacian for second-derivative
-                R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl
+                R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl   # PDE dependent
 
             sumR = 0.0
             sumD = 0.0
@@ -100,11 +100,16 @@ class FVTModel(PermeationModel):
             for i in range(1, Nx - 1):
                 # Laplacian for second-derivative
                 lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 
-                #  Diagonal of Jacobian, by taking the partial derivative of the residual R[i] with respect to D[i]
-                J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)  # The -2.0 factor comes from differentiating the centered second‐difference approximation (i.e., D[i+1] - 2.0*D[i] + D[i-1]) with respect to D[i].
+                # Diagonal of Jacobian, by taking the partial derivative of the residual R[i] with respect to D[i]:
+                # J[i, j] = dR[i] / dD_new[j], where dR[i] is the partial derivative of residual i with respect to diffusivity at grid point j
+                # (1.0 / dt): This term comes from differentiating the time derivative term in the residual
+                # - K * (lapl + (-2.0 * D_new[i]) / dx2): This term comes from differentiating the diffusion term in the residual.
+                # The -2.0 factor comes from differentiating the centered second‐difference approximation (i.e., D[i+1] - 2.0*D[i] + D[i-1]) with respect to D[i].
+                # Use diagonal Jacobian to approximate full Jacobian
+                J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)  
                 if J_diag == 0.0:
                     J_diag = 1e-8   # Avoid division by zero
-                D_new[i] = D_new[i] - relax * (((D_new[i] - D_old[i]) / dt) - K * D_new[i] * lapl) / J_diag # implicit update
+                D_new[i] = D_new[i] - relax * (((D_new[i] - D_old[i]) / dt) - K * D_new[i] * lapl) / J_diag # implicit update (PDE dependent)
 
             D_new[0] = D1_prime
             D_new[Nx - 1] = D2_prime

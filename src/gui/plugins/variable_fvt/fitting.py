@@ -114,10 +114,6 @@ class VariableFVTFitting(ModeFrame):
         file_frame = ctk.CTkFrame(parent)
         file_frame.pack(fill="x", padx=10, pady=5)
         
-        # Title for section
-        # ctk.CTkLabel(file_frame, text="Data Selection", 
-        #             font=ctk.CTkFont(weight="bold")).pack(pady=5)
-        
         # Data source selection
         source_frame = ctk.CTkFrame(file_frame)
         source_frame.pack(fill="x", pady=5)
@@ -470,8 +466,8 @@ class VariableFVTFitting(ModeFrame):
             self.results_text.delete("1.0", "end")
             self.results_text.insert("1.0", "Fitting Results:\n")
             self.results_text.insert("end", f"D1': {fit_results['D1_prime']:.4e}\n")
-            if 'DT0' in fit_results:
-                self.results_text.insert("end", f"DT0: {fit_results['DT0']:.4e}\n")
+            if 'DT_0' in fit_results:
+                self.results_text.insert("end", f"DT0: {fit_results['DT_0']:.4e}\n")
             self.results_text.insert("end", f"RMSE: {fit_results['rmse']:.4e}\n")
             
             self.progress.set(0.8)
