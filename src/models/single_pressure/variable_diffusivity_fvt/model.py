@@ -13,6 +13,89 @@ from .parameters import FVTModelParameters, FVTTransportParams
 from ....utils.optimisation import OptimisationCallback
 import time
 
+@nb.njit
+def _calculate_jacobian(D_new, dt, dx, K, Nx):
+    """Calculate the Jacobian matrix elements."""
+    dx2 = dx * dx
+    J_diag = np.zeros(Nx - 2)
+    J_lower = np.zeros(Nx - 3)
+    J_upper = np.zeros(Nx - 3)
+
+    for i in range(1, Nx - 1):
+        lapl = (D_new[i + 1] - 2.0 * D_new[i] + D_new[i - 1]) / dx2
+
+        # Diagonal elements
+        J_diag[i - 1] = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)
+
+        # Off-diagonal elements
+        if i > 1:
+            J_lower[i - 2] = K * D_new[i - 1] / dx2
+        if i < Nx - 2:
+            J_upper[i - 1] = K * D_new[i + 1] / dx2
+    
+    return J_diag, J_lower, J_upper
+
+@nb.njit
+def _solve_tridiagonal(a, b, c, d):
+    """Solve a tridiagonal system Ax = d using the Thomas algorithm."""
+    nf = d.shape[0]
+    ac, bc, cc, dc = a.copy(), b.copy(), c.copy(), d.copy()
+    for it in range(1, nf):
+        mc = ac[it-1]/bc[it-1]
+        bc[it] = bc[it] - mc*cc[it-1]
+        dc[it] = dc[it] - mc*dc[it-1]
+
+    xc = np.zeros_like(bc)
+    xc[-1] = dc[-1]/bc[-1]
+
+    for il in range(nf-2, -1, -1):
+        xc[il] = (dc[il]-cc[il]*xc[il+1])/bc[il]
+    return xc
+
+@nb.njit
+def _newton_update_jit(D_old, dt, dx, K, max_iter, D1_prime, D2_prime, relax, rel_tol):
+    """
+    JIT-compiled helper to perform Newton iterations with full Jacobian for one time step.
+    Returns the updated solution D_new and a convergence flag (1 if converged, else 0).
+    """
+    D_new = D_old.copy()
+    Nx = D_old.shape[0]
+    converged = 0
+    dx2 = dx * dx
+    for it in range(max_iter):
+        R = np.empty(Nx - 2, dtype=np.float64)
+        for i in range(1, Nx - 1):
+            lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2
+            R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl
+
+        sumR = 0.0
+        sumD = 0.0
+        for i in range(Nx - 2):
+            sumR += R[i] * R[i]
+        for i in range(1, Nx - 1):
+            sumD += D_new[i] * D_new[i]
+        norm_R = np.sqrt(sumR)
+        norm_D = np.sqrt(sumD)
+        if norm_D == 0.0:
+            norm_D = 1e-12
+
+        if norm_R / norm_D < rel_tol:
+            converged = 1
+            break
+
+        # Solve the tridiagonal system J * update = -R
+        J_diag, J_lower, J_upper = _calculate_jacobian(D_new, dt, dx, K, Nx)
+
+        update = _solve_tridiagonal(J_lower, J_diag, J_upper, -R)
+
+        # Update the solution
+        for i in range(1, Nx - 1):
+            D_new[i] += relax * update[i-1]
+
+        D_new[0] = D1_prime
+        D_new[Nx - 1] = D2_prime
+    return D_new, converged
+
 class FVTModel(PermeationModel):
     """Variable diffusivity model based on Free Volume Theory (FVT)."""
     
@@ -65,56 +148,6 @@ class FVTModel(PermeationModel):
         
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
 
-    @staticmethod
-    @nb.njit
-    def _newton_update_jit(D_old, dt, dx, K, max_iter, D1_prime, D2_prime, relax, rel_tol):
-        """
-        JIT-compiled helper to perform Newton iterations for one time step.
-        Returns updated solution D_new and a convergence flag (1 if converged, else 0).
-        """
-        D_new = D_old.copy()
-        Nx = D_old.shape[0]
-        converged = 0
-        dx2 = dx * dx
-        for it in range(max_iter):
-            R = np.empty(Nx - 2, dtype=np.float64)
-            for i in range(1, Nx - 1):
-                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 # Laplacian for second-derivative
-                R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl   # PDE dependent
-
-            sumR = 0.0
-            sumD = 0.0
-            for i in range(Nx - 2):
-                sumR += R[i] * R[i]
-            for i in range(1, Nx - 1):
-                sumD += D_new[i] * D_new[i]
-            norm_R = np.sqrt(sumR)
-            norm_D = np.sqrt(sumD)
-            if norm_D == 0.0:
-                norm_D = 1e-12
-
-            if norm_R / norm_D < rel_tol:
-                converged = 1
-                break
-
-            for i in range(1, Nx - 1):
-                # Laplacian for second-derivative
-                lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2 
-                # Diagonal of Jacobian, by taking the partial derivative of the residual R[i] with respect to D[i]:
-                # J[i, j] = dR[i] / dD_new[j], where dR[i] is the partial derivative of residual i with respect to diffusivity at grid point j
-                # (1.0 / dt): This term comes from differentiating the time derivative term in the residual
-                # - K * (lapl + (-2.0 * D_new[i]) / dx2): This term comes from differentiating the diffusion term in the residual.
-                # The -2.0 factor comes from differentiating the centered second‐difference approximation (i.e., D[i+1] - 2.0*D[i] + D[i-1]) with respect to D[i].
-                # Use diagonal Jacobian to approximate full Jacobian
-                J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)  
-                if J_diag == 0.0:
-                    J_diag = 1e-8   # Avoid division by zero
-                D_new[i] = D_new[i] - relax * (((D_new[i] - D_old[i]) / dt) - K * D_new[i] * lapl) / J_diag # implicit update (PDE dependent)
-
-            D_new[0] = D1_prime
-            D_new[Nx - 1] = D2_prime
-        return D_new, converged
-
     def _solve_pde(self, D1_prime, DT_0, T, X, L, dx, 
                   D2_prime=1.0, rel_tol=1e-8, max_iter=100, relax=0.8,
                   dt_init=0.0005, dt_target=10, dt_min=1e-6, dt_ramp_factor=1.1,
@@ -146,7 +179,7 @@ class FVTModel(PermeationModel):
             trial_dt = dt
             current_relax = relax  # start with the original relaxation
             while not accepted:
-                D_new, converged = FVTModel._newton_update_jit(D_history[-1], trial_dt, dx, K,
+                D_new, converged = _newton_update_jit(D_history[-1], trial_dt, dx, K,
                                                     max_iter, D1_prime, D2_prime, current_relax, rel_tol)
                 if converged == 1:
                     accepted = True
@@ -192,6 +225,7 @@ class FVTModel(PermeationModel):
         
         Parameters
         ----------
+
         simulation_params : dict, optional
             Dictionary containing simulation parameters:
             - T: total time [s]
@@ -417,6 +451,7 @@ class FVTModel(PermeationModel):
         
         Parameters
         ----------
+
         data : pd.DataFrame
             Experimental data.
         initial_guess : tuple
