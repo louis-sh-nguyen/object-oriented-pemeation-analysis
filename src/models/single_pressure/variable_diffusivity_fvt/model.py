@@ -14,86 +14,115 @@ from ....utils.optimisation import OptimisationCallback
 import time
 
 @nb.njit
-def _calculate_jacobian(D_new, dt, dx, K, Nx):
-    """Calculate the Jacobian matrix elements."""
+def _calculate_residual(D_new, D_old, dt, dx, K):
+    """Vectorized residual calculation."""
     dx2 = dx * dx
+    # Calculate Laplacian for interior points
+    lapl = (D_new[2:] - 2.0 * D_new[1:-1] + D_new[:-2]) / dx2
+    # Calculate residual
+    R = (D_new[1:-1] - D_old[1:-1]) / dt - K * D_new[1:-1] * lapl
+    return R, lapl
+
+@nb.njit
+def _calculate_jacobian(D_new, dt, dx, K, lapl):
+    """Calculate Jacobian elements efficiently."""
+    dx2 = dx * dx
+    Nx = D_new.shape[0]
+    
+    # Pre-allocate arrays
     J_diag = np.zeros(Nx - 2)
     J_lower = np.zeros(Nx - 3)
     J_upper = np.zeros(Nx - 3)
 
-    for i in range(1, Nx - 1):
-        lapl = (D_new[i + 1] - 2.0 * D_new[i] + D_new[i - 1]) / dx2
-
-        # Diagonal elements
-        J_diag[i - 1] = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)
-
-        # Off-diagonal elements
-        if i > 1:
-            J_lower[i - 2] = K * D_new[i - 1] / dx2
-        if i < Nx - 2:
-            J_upper[i - 1] = K * D_new[i + 1] / dx2
+    # Diagonal elements (vectorized)
+    J_diag = (1.0 / dt) - K * (lapl + (-2.0 * D_new[1:-1]) / dx2)
+    
+    # Off-diagonal elements (vectorized)
+    J_lower = K * D_new[1:-2] / dx2
+    J_upper = K * D_new[2:-1] / dx2
     
     return J_diag, J_lower, J_upper
 
 @nb.njit
 def _solve_tridiagonal(a, b, c, d):
-    """Solve a tridiagonal system Ax = d using the Thomas algorithm."""
-    nf = d.shape[0]
-    ac, bc, cc, dc = a.copy(), b.copy(), c.copy(), d.copy()
-    for it in range(1, nf):
-        mc = ac[it-1]/bc[it-1]
-        bc[it] = bc[it] - mc*cc[it-1]
-        dc[it] = dc[it] - mc*dc[it-1]
-
-    xc = np.zeros_like(bc)
-    xc[-1] = dc[-1]/bc[-1]
-
-    for il in range(nf-2, -1, -1):
-        xc[il] = (dc[il]-cc[il]*xc[il+1])/bc[il]
-    return xc
+    """Optimized Thomas algorithm implementation."""
+    n = d.shape[0]
+    # Use single arrays to minimize memory allocation
+    c_prime = c.copy()
+    d_prime = d.copy()
+    
+    # Forward sweep
+    c_prime[0] = c[0] / b[0]
+    d_prime[0] = d[0] / b[0]
+    
+    for i in range(1, n):
+        m = 1.0 / (b[i] - a[i-1] * c_prime[i-1])
+        c_prime[i] = c[i] * m if i < n-1 else 0.0
+        d_prime[i] = (d[i] - a[i-1] * d_prime[i-1]) * m
+    
+    # Back substitution (in-place in d_prime)
+    for i in range(n-2, -1, -1):
+        d_prime[i] = d_prime[i] - c_prime[i] * d_prime[i+1]
+    
+    return d_prime
 
 @nb.njit
 def _newton_update_jit(D_old, dt, dx, K, max_iter, D1_prime, D2_prime, relax, rel_tol):
-    """
-    JIT-compiled helper to perform Newton iterations with full Jacobian for one time step.
-    Returns the updated solution D_new and a convergence flag (1 if converged, else 0).
-    """
+    """Optimized Newton iteration implementation."""
     D_new = D_old.copy()
     Nx = D_old.shape[0]
-    converged = 0
     dx2 = dx * dx
+    converged = 0
+    
+    # Pre-allocate arrays
+    R = np.empty(Nx - 2, dtype=np.float64)
+    J_diag = np.empty(Nx - 2, dtype=np.float64)
+    J_lower = np.empty(Nx - 3, dtype=np.float64)
+    J_upper = np.empty(Nx - 3, dtype=np.float64)
+    
     for it in range(max_iter):
-        R = np.empty(Nx - 2, dtype=np.float64)
-        for i in range(1, Nx - 1):
-            lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2
-            R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl
-
+        # Combined residual and Jacobian calculation
         sumR = 0.0
         sumD = 0.0
-        for i in range(Nx - 2):
-            sumR += R[i] * R[i]
+        
+        # Calculate residual and Jacobian elements in a single loop
         for i in range(1, Nx - 1):
+            # Compute Laplacian directly
+            lapl = (D_new[i+1] - 2.0 * D_new[i] + D_new[i-1]) / dx2
+            
+            # Calculate residual
+            R[i-1] = (D_new[i] - D_old[i]) / dt - K * D_new[i] * lapl
+            sumR += R[i-1] * R[i-1]
             sumD += D_new[i] * D_new[i]
+            
+            # Calculate Jacobian elements
+            J_diag[i-1] = (1.0 / dt) - K * (lapl + (-2.0 * D_new[i]) / dx2)
+            
+            # Off-diagonal elements
+            if i > 1:
+                J_lower[i-2] = K * D_new[i-1] / dx2
+            if i < Nx - 2:
+                J_upper[i-1] = K * D_new[i+1] / dx2
+        
+        # Check convergence with efficient norm calculation
         norm_R = np.sqrt(sumR)
-        norm_D = np.sqrt(sumD)
-        if norm_D == 0.0:
-            norm_D = 1e-12
-
+        norm_D = np.sqrt(sumD) if sumD > 0 else 1e-12
+        
         if norm_R / norm_D < rel_tol:
             converged = 1
             break
-
-        # Solve the tridiagonal system J * update = -R
-        J_diag, J_lower, J_upper = _calculate_jacobian(D_new, dt, dx, K, Nx)
-
+        
+        # Solve the tridiagonal system efficiently
         update = _solve_tridiagonal(J_lower, J_diag, J_upper, -R)
-
-        # Update the solution
+        
+        # Update solution
         for i in range(1, Nx - 1):
             D_new[i] += relax * update[i-1]
-
+        
+        # Apply boundary conditions
         D_new[0] = D1_prime
-        D_new[Nx - 1] = D2_prime
+        D_new[-1] = D2_prime
+        
     return D_new, converged
 
 class FVTModel(PermeationModel):
