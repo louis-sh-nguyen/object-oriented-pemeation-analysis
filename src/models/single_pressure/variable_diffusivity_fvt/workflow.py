@@ -51,7 +51,8 @@ def manual_workflow(
     simulation_params: Dict = {
         'T': 10e3,  # total time [s]
         'dx': 0.002,   # spatial step [adim]
-        'X': 1.0      # normalized position
+        'X': 1.0,      # normalized position
+        'use_full_jacobian': True
     },
     output_settings: Dict[str, Any] = {
         'output_dir': None,
