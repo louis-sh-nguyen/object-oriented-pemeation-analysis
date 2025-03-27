@@ -124,18 +124,19 @@ def test_manual_workflow():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        D1_prime=2.0,
-        DT_0=2.87e-7,
+        D1_prime=4.00,
+        DT_0=8.38e-7,
         simulation_params={
-            'T': 40e3,  # total time [s]
-            'dx': 0.002,   # spatial step [adim]
-            'X': 1.0      # normalized position
+            'T': 10e3,  # total time [s]
+            'dx': 0.005,   # spatial step [adim]
+            'X': 1.0,      # normalized position
+            'use_full_jacobian': True
         },
         output_settings={
             'output_dir': 'outputs/manual_workflow',
-            'display_plots': True,
+            'display_plots': False,
             'save_plots': False,
-            'save_data': False,
+            'save_data': True,
             'plot_format': 'png',
             'data_format': 'csv'
         }
@@ -288,7 +289,7 @@ def fit_all_data(n=None):
     # Create timestamp-based output directory
     from datetime import datetime
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    output_base_dir = f'outputs/fitting/{timestamp}_fullcurve'
+    output_base_dir = f'outputs/fitting/{timestamp}_breakthrough'
     os.makedirs(output_base_dir, exist_ok=True)
     
     # List all xlsx files in the data directory
@@ -329,7 +330,7 @@ def fit_all_data(n=None):
                 flowrate=8.0,
                 DT_0=2.8e-7,
                 D1_prime=2.0,
-                stabilisation_threshold=0.002,  # 0.005 for breakthrough curve, 0.002 for whole curve
+                stabilisation_threshold=0.005,  # 0.005 for breakthrough curve, 0.002 for whole curve
                 fitting_settings={
                     'mode': 'both',
                     'initial_guess': (2.0, 1.0e-7),
@@ -377,8 +378,8 @@ def fit_all_data(n=None):
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
-    # test_manual_workflow()
+    test_manual_workflow()
     # test_parameter_sensitivity()
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
-    fit_all_data()
+    # fit_all_data()
