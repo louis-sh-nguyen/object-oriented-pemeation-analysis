@@ -113,7 +113,7 @@ def manual_workflow(
         Dictionary containing figure objects for each plot
     """
     # Use default settings with any overrides
-    sim_params = {**DEFAULT_SIMULATION_PARAMS, **(simulation_params or {})}
+    simulation_params = {**DEFAULT_SIMULATION_PARAMS, **(simulation_params or {})}
     output_settings = {**DEFAULT_OUTPUT_SETTINGS, **(output_settings or {})}
     
     # Setup output directories
@@ -133,7 +133,7 @@ def manual_workflow(
     )
     
     # Solve PDE with updated method
-    Dprime_df, flux_df = model.solve_pde(simulation_params=sim_params)
+    Dprime_df, flux_df = model.solve_pde(simulation_params=simulation_params)
     
     # Create plots
     figures = {}
@@ -152,7 +152,7 @@ def manual_workflow(
     plot_diffusivity_location_profile(
         diffusivity_profile=Dprime_df,
         L=thickness,
-        T=sim_params['T'],
+        T=simulation_params['T'],
         ax=ax2,
         display=False
     )
