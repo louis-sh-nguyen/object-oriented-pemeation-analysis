@@ -134,9 +134,9 @@ def test_manual_workflow():
         },
         output_settings={
             'output_dir': 'outputs/manual_workflow',
-            'display_plots': False,
+            'display_plots': True,
             'save_plots': False,
-            'save_data': True,
+            'save_data': False,
             'plot_format': 'png',
             'data_format': 'csv'
         }
@@ -378,8 +378,8 @@ def fit_all_data(n=None):
 if __name__ == '__main__':
     # test_model_creation()
     # test_pde_solving()
-    test_manual_workflow()
+    # test_manual_workflow()
     # test_parameter_sensitivity()
-    # test_data_fitting_workflow_D1prime()
+    test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
     # fit_all_data()

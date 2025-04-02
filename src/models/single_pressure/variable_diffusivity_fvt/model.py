@@ -4,6 +4,7 @@ import pandas as pd
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.optimize import minimize
+from scipy.integrate import solve_ivp
 from tqdm import tqdm
 import numba as nb
 
@@ -80,8 +81,6 @@ def _newton_update_jit(D_old, dt, dx, K, max_iter, D1_prime, D2_prime, relax, re
         norm_R = np.sqrt(sumR)
         norm_D = np.sqrt(sumD) if sumD > 0 else 1e-12
         
-        # print(f"Iteration {it}: norm_R = {norm_R:.3g}, norm_D = {norm_D:.3g}, norm_R/norm_D = {norm_R / norm_D:.3g}")
-        
         if norm_R / norm_D < rel_tol:
             converged = 1
             break
@@ -155,24 +154,67 @@ class FVTModel(PermeationModel):
         return cls(FVTModelParameters(base=base_params, transport=transport_params))
 
     def _solve_pde(self, D1_prime, DT_0, T, X, L, dx, 
-                  D2_prime=1.0, rel_tol=1e-8, max_iter=100, relax=0.8,
-                  dt_init=0.0005, dt_target=10, dt_min=1e-6, dt_ramp_factor=1.1,
-                  track_solving_progress=True, use_full_jacobian=True,
-                  D0=None):  # Added D0 parameter to accept initial condition
+                  D2_prime=1.0, rel_tol=1e-8, atol=None,
+                  dt_init=0.0005, track_solving_progress=True,
+                  D0=None):  # Removed unused parameters
         """
-        Adaptive implicit PDE solver using Newton's method with adaptive dt.
-        Can use either full Jacobian (default) or diagonal approximation.
+        Solve the nonlinear PDE using scipy's solve_ivp method (Method of Lines).
         
         Parameters
         ----------
+        D1_prime : float
+            Normalized diffusivity at x=0 (boundary condition)
+        DT_0 : float
+            Temperature-dependent diffusivity coefficient [cm² s⁻¹]
+        T : float
+            Total simulation time [s]
+        X : float
+            Normalized spatial domain length (usually 1.0)
+        L : float
+            Membrane thickness [cm]
+        dx : float
+            Spatial step size for discretization
+        D2_prime : float, optional
+            Normalized diffusivity at x=X (boundary condition), default=1.0
+        rel_tol : float, optional
+            Relative tolerance for solver
+        atol : float, optional
+            Absolute tolerance for solver, defaults to rel_tol * 0.1 if None
+        dt_init : float, optional
+            Initial time step hint for solver
+        track_solving_progress : bool, optional
+            Whether to display progress information
         D0 : ndarray, optional
             Initial condition for D profile. If None, defaults to flat profile.
+        
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame]
+            Diffusivity profiles and flux data
         """
+        # Discretize space
         Nx = int(X / dx) + 1
         x = np.linspace(0, X, Nx)
         K = DT_0 / (L * L)
         
-        # Initial condition: D=1 everywhere except boundaries, or use provided D0
+        # Define the ODE system derived from Method of Lines
+        def diffusion_ode(t, D):
+            """Convert PDE to system of ODEs using Method of Lines"""
+            dDdt = np.zeros_like(D)
+            dx2 = dx * dx
+            
+            # Apply interior points dynamics
+            for i in range(1, len(D)-1):
+                lapl = (D[i+1] - 2.0*D[i] + D[i-1]) / dx2
+                dDdt[i] = K * D[i] * lapl
+            
+            # Boundary conditions
+            dDdt[0] = 0  # Fixed D1_prime (Dirichlet)
+            dDdt[-1] = 0  # Fixed D2_prime (Dirichlet)
+            
+            return dDdt
+        
+        # Initial condition
         if D0 is None:
             D0 = np.ones(Nx, dtype=np.float64)
             D0[0] = D1_prime     # Left boundary
@@ -181,71 +223,57 @@ class FVTModel(PermeationModel):
             # Ensure boundary conditions are properly set in provided D0
             D0[0] = D1_prime
             D0[-1] = D2_prime
-
-        t_history = [0.0]
-        D_history = [D0.copy()]
-        flux_history = []
-        current_t = 0.0
-        dt = dt_init
-        D_old = D0.copy()
-
+        
+        # Configuration for the solver
+        if atol is None:
+            atol = rel_tol * 0.1  # Set absolute tolerance based on relative tolerance
+        
+        # Track solution timing if progress tracking is enabled
         if track_solving_progress:
-            pbar = tqdm(total=T, desc=f"Adaptive PDE Solve (D1'={D1_prime}, DTO={DT_0})", ncols=100)
+            start_time = time.time()
+            print(f"Starting solve_ivp integration (D1'={D1_prime:.2f}, DT0={DT_0:.2e})...")
             
-        while current_t < T:
-            accepted = False
-            trial_dt = dt
-            current_relax = relax  # start with the original relaxation
-            
-            while not accepted:
-                D_new, converged = _newton_update_jit(D_history[-1], trial_dt, dx, K,
-                                                    max_iter, D1_prime, D2_prime, current_relax, rel_tol,
-                                                    use_full_jacobian)  # Added parameter
-                if converged == 1:
-                    accepted = True
-                else:
-                    trial_dt *= 0.5
-                    # print("Reducing dt to", trial_dt)
-                    # Instead of stopping, if trial_dt drops below dt_min, switch to fallback.
-                    if trial_dt < dt_min:
-                        # print("dt has reached the minimum threshold. Switching to dt_min and increasing damping.")
-                        trial_dt = dt_min
-                        current_relax = current_relax * 0.5  # increase damping
-            
-            # Calculate current flux for steady-state detection
-            current_flux = (-(D_new[-1] - D_new[-2]) / dx) / (-(D2_prime - D1_prime) / X)
-            flux_history.append(current_flux)
-            
-            # Adaptive time stepping logic
-            if trial_dt < dt_target:
-                new_dt = min(trial_dt * dt_ramp_factor, dt_target)
-                # if new_dt > trial_dt:
-                #     print("Increasing dt from", trial_dt, "to", new_dt)
-                dt = new_dt
-            else:
-                dt = trial_dt
-                
-            D_old = D_new.copy()  # Keep last profile for comparison
-            current_t += dt
-            t_history.append(current_t)
-            D_history.append(D_new.copy())
-            
-            if track_solving_progress:
-                pbar.update(dt) # increments the progress by an amount dt
-
+        # Solve using solve_ivp with BDF method (good for stiff problems)
+        solution = solve_ivp(
+            diffusion_ode, 
+            t_span=[0, T],
+            y0=D0,
+            method='BDF',  # Backward Differentiation Formula (for stiff problems)
+            rtol=rel_tol,
+            atol=atol,
+            first_step=dt_init,  # Initial step hint
+            max_step=T/10,  # Use reasonable max step based on total time
+            dense_output=True  # Allow interpolation for output
+        )
+        
         if track_solving_progress:
-            pbar.close()
-
-        # Process results
+            end_time = time.time()
+            solve_time = end_time - start_time
+            print(f"Integration complete. Time taken: {solve_time:.4f} seconds")
+            print(f"Number of function evaluations: {solution.nfev}")
+            print(f"Number of Jacobian evaluations: {solution.njev}")
+            print(f"Solver status: {solution.status} (0=success)")
+        
+        # Extract solution information - get more points for smoother output
+        num_output_points = min(1000, max(100, int(T/10)))  # Adaptive number of output points
+        t_eval = np.linspace(0, T, num_output_points)
+        D_history = []
+        
+        for t in t_eval:
+            D_t = solution.sol(t)
+            D_history.append(D_t)
+        
         D_arr = np.array(D_history)
-        t_arr = np.array(t_history)
+        
+        # Calculate normalized flux
         F_norm = (-(D_arr[:, -1] - D_arr[:, -2]) / dx) / (-(D2_prime - D1_prime) / X)
         
-        Dprime_df = pd.DataFrame(D_arr, columns=[f"x={xi:.3f}" for xi in x], index=t_arr)
+        # Create DataFrames for output
+        Dprime_df = pd.DataFrame(D_arr, columns=[f"x={xi:.3f}" for xi in x], index=t_eval)
         flux_df = pd.DataFrame({
-            "time": t_arr,
+            "time": t_eval,
             "normalised_flux": F_norm,
-            "tau": DT_0 * t_arr / (L * L)
+            "tau": DT_0 * t_eval / (L * L)
         })
         
         return Dprime_df, flux_df
@@ -259,15 +287,12 @@ class FVTModel(PermeationModel):
         simulation_params : dict, optional
             Dictionary containing simulation parameters:
             - T: total time [s]
-            - dt: time step [s]
+            - dt: initial time step [s]
             - dx: spatial step [normalized]
             - X: normalized position
             - rel_tol: relative tolerance for convergence (default 1e-8)
-            - max_iter: maximum iterations for Newton solver (default 100)
-            - relax: relaxation parameter (default 0.8)
+            - atol: absolute tolerance for solver (default rel_tol*0.1)
             - fitting_mode: set to True when called from fitting functions (default False)
-            - use_full_jacobian: Whether to use the full Jacobian matrix (True) or diagonal approximation (False)
-                               (default True for better convergence properties)
         
         Returns
         -------
@@ -280,12 +305,10 @@ class FVTModel(PermeationModel):
             
         # Extract parameters with defaults
         rel_tol = simulation_params.get('rel_tol', 1e-8)
-        max_iter = simulation_params.get('max_iter', 100)
-        relax = simulation_params.get('relax', 0.8)
+        atol = simulation_params.get('atol', None)
         fitting_mode = simulation_params.get('fitting_mode', False)
-        use_full_jacobian = simulation_params.get('use_full_jacobian', True)
         
-        # Single-stage solver with configurable Jacobian
+        # Solver with solve_ivp
         D_profile, flux = self._solve_pde(
             D1_prime=self.params.transport.D1_prime,
             DT_0=self.params.transport.DT_0,
@@ -294,13 +317,8 @@ class FVTModel(PermeationModel):
             L=self.params.transport.thickness,
             dx=simulation_params.get('dx', 0.01),
             dt_init=simulation_params.get('dt', 0.001),
-            dt_target=simulation_params.get('dt_target', 10),
-            dt_min=simulation_params.get('dt_min', 1e-6),
-            dt_ramp_factor=simulation_params.get('dt_ramp_factor', 1.1),
             rel_tol=rel_tol,
-            max_iter=max_iter,
-            relax=relax,
-            use_full_jacobian=use_full_jacobian,
+            atol=atol,
             track_solving_progress=not fitting_mode
         )
         
@@ -440,6 +458,7 @@ class FVTModel(PermeationModel):
                 T=data['time'].max(),
                 X=1.0,
                 dx=0.005,
+                rel_tol=1e-6,  # Use moderate tolerance for fitting
                 track_solving_progress=False
             )
             model_norm_flux = np.interp(data['tau'], flux_df['tau'], flux_df['normalised_flux'])
@@ -497,36 +516,36 @@ class FVTModel(PermeationModel):
         }
 
     def _fit_D1prime_DT0(self, data: pd.DataFrame, 
-                               initial_guess: Tuple=(5.0, 1e-7),
-                               bounds: Tuple=((1.01, 100), (1e-8, 1e-5)),
-                               n_starts: int=1) -> dict:
+                         initial_guess: Tuple=(5.0, 1e-7),
+                         bounds: Tuple=((1.01, 100), (1e-8, 1e-5)),
+                         n_starts: int=1) -> dict:
         """
-        Multi-stage parameter fitting strategy:
-        1. Coarse grid + diagonal Jacobian for rough fit
-        2. Medium grid + diagonal Jacobian for refinement
-        3. Fine grid + full Jacobian for final polish
+        Multi-stage parameter fitting strategy using solve_ivp with progressively finer tolerances
         """
         stages = [
-            # (dx, rel_tol, use_full_jacobian)
-            (0.02, 1e-6, False),   # Stage 1: Very coarse
-            (0.01, 1e-7, False),   # Stage 2: Medium
-            (0.005, 1e-8, True)    # Stage 3: Fine
+            # (dx, rel_tol)
+            (0.02, 1e-6),   # Stage 1: Very coarse
+            (0.01, 1e-7),   # Stage 2: Medium
+            (0.005, 1e-8)   # Stage 3: Fine
         ]
         
         best_result = None
         best_rmse = np.inf
         current_guess = initial_guess
         
-        for stage, (dx, tol, use_full) in enumerate(stages, 1):
+        for stage, (dx, tol) in enumerate(stages, 1):
             def objective(params):
                 D1_prime, DT_0 = params
                 _, flux_df = self._solve_pde(
                     L=self.params.transport.thickness,
-                    D1_prime=D1_prime, DT_0=DT_0,
-                    T=data['time'].max(), X=1.0,
-                    dx=dx, rel_tol=tol,
-                    track_solving_progress=False,
-                    use_full_jacobian=use_full  # Added parameter
+                    D1_prime=D1_prime, 
+                    DT_0=DT_0,
+                    T=data['time'].max(), 
+                    X=1.0,
+                    dx=dx, 
+                    rel_tol=tol,
+                    dt_init=0.001 if stage == 1 else 0.0001,  # Smaller initial step for finer stages
+                    track_solving_progress=False
                 )
                 model_flux = np.interp(data['time'], flux_df['time'], 
                                      flux_df['normalised_flux'])
