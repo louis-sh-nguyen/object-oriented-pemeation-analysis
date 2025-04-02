@@ -74,15 +74,18 @@ def test_data_fitting():
 
 def test_full_workflow():
     """Test complete analysis workflow"""
+    data_dir = os.path.join(os.path.dirname(__file__), 'data', 'single_pressure')
+    file_path = os.path.join(data_dir, 'RUN_H_25C-50bar.xlsx')
+    
     results = time_lag_analysis_workflow(
-        file_path='data/single_pressure/RUN_H_25C-50bar.xlsx',
+        file_path=file_path,
         pressure=50.0,
         temperature=25.0,
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
         output_settings={
-            'output_dir': 'output/test_workflow',
+            'output_dir': os.path.join(os.path.dirname(__file__), 'output', 'test_workflow'),
             'display_plots': True,
             'save_plots': False,
             'save_data': False,

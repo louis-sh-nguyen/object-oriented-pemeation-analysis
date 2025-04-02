@@ -1,7 +1,8 @@
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Callable
 import numpy as np
 import pandas as pd
 from scipy.stats import linregress
+from scipy.integrate import solve_ivp
 
 from ...base_model import PermeationModel
 from ...base_parameters import BaseParameters
@@ -64,7 +65,7 @@ class TimelagModel(PermeationModel):
         if self.params.transport.diffusivity is not None:
             return self.params.transport.diffusivity
             
-        stab_time = find_stabilisation_time(data)
+        stab_time = find_stabilisation_time(data, flux_col='normalised_flux')
         time_lag, stats = find_time_lag(data, stab_time)
         
         D = self.params.transport.thickness**2 / (6 * time_lag)
@@ -136,10 +137,100 @@ class TimelagModel(PermeationModel):
         self.results['equilibrium_concentration'] = C
         return C
 
+    def _solve_pde(self, D: float, C_eq: float, L: float, T: float, 
+                  N: int = 50, t_eval: Optional[np.ndarray] = None, 
+                  method: str = 'BDF', rtol: float = 1e-4, atol: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Helper method to solve diffusion PDE using solve_ivp
+        
+        Parameters
+        ----------
+        D : float
+            Diffusion coefficient [cm² s⁻¹]
+        C_eq : float
+            Equilibrium concentration [cm³(STP) cm⁻³]
+        L : float
+            Membrane thickness [cm]
+        T : float
+            Total time [s]
+        N : int
+            Number of spatial grid points
+        t_eval : Optional[np.ndarray]
+            Time points at which to store the solution. If None, defaults to 100 evenly spaced points.
+        method : str
+            Integration method to use in solve_ivp
+        rtol : float
+            Relative tolerance for the solver
+        atol : float
+            Absolute tolerance for the solver
+            
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+            Time points, spatial points, concentration matrix, and flux values
+        """
+        # Spatial discretization
+        x = np.linspace(0, L, N)
+        dx = x[1] - x[0]
+        
+        # Time evaluation points
+        if t_eval is None:
+            t_eval = np.linspace(0, T, 100)
+        
+        # Initial condition (zero everywhere except at boundaries)
+        C0 = np.zeros(N-2)  # Exclude boundary points
+        
+        # Define ODE system (discretized PDE)
+        def diffusion_system(t, C):
+            # Initialize with boundary conditions
+            C_full = np.zeros(N)
+            C_full[0] = C_eq  # Left boundary at x=0
+            C_full[1:-1] = C  # Interior points
+            C_full[-1] = 0    # Right boundary at x=L
+            
+            # Calculate spatial derivatives using central difference
+            dC_dt = np.zeros(N-2)
+            for i in range(N-2):
+                dC_dt[i] = D * (C_full[i] - 2*C_full[i+1] + C_full[i+2]) / dx**2
+            
+            return dC_dt
+        
+        # Solve the system
+        solution = solve_ivp(
+            fun=diffusion_system,
+            t_span=(0, T),
+            y0=C0,
+            t_eval=t_eval,
+            method=method,
+            rtol=rtol,
+            atol=atol
+        )
+        
+        if not solution.success:
+            raise RuntimeError(f"Integration failed: {solution.message}")
+        
+        # Extract results
+        t = solution.t
+        C_interior = solution.y
+        
+        # Create full concentration arrays with boundary conditions
+        C_full = np.zeros((len(t), N))
+        C_full[:, 0] = C_eq  # Left boundary
+        C_full[:, 1:-1] = C_interior.T
+        C_full[:, -1] = 0    # Right boundary
+        
+        # Calculate flux at x=L
+        flux_values = np.zeros(len(t))
+        for i in range(len(t)):
+            # Use backward difference for flux at boundary
+            flux_values[i] = -D * (C_full[i, -1] - C_full[i, -2]) / dx
+        
+        return t, x, C_full, flux_values
+    
     def solve_pde(self, D: float, C_eq: float, L: float, T: float, 
                   dt: float, dx: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Solve diffusion PDE with constant diffusivity
+        Solve diffusion PDE with constant diffusivity using solve_ivp
         
         Parameters
         ----------
@@ -161,45 +252,20 @@ class TimelagModel(PermeationModel):
         Tuple[pd.DataFrame, pd.DataFrame]
             Concentration profile and flux results
         """
-        # Validate parameters
-        if dt > dx**2 / (2 * D):
-            raise ValueError("Stability condition not met: dt <= dx²/(2D)")
+        # Calculate number of spatial points based on dx
+        N = int(L / dx) + 1
         
-        # Calculate grid points
-        Nx = int(L / dx) + 1
+        # Generate time evaluation points to match the original dt spacing
         Nt = int(T / dt) + 1
+        t_eval = np.linspace(0, T, Nt)
         
-        # Initialize arrays
-        x = np.linspace(0, L, Nx)
-        t = np.linspace(0, T, Nt)
-        C = np.zeros(Nx)
-        C_surface = np.zeros((Nt, Nx))
-        flux_values = np.zeros(Nt)
-        
-        # Initial condition
-        C[0] = C_eq  # Boundary condition at x=0
-        
-        # Time stepping
-        for n in range(Nt):
-            C_new = C.copy()
-            
-            # Space stepping
-            for i in range(1, Nx-1):
-                C_new[i] = C[i] + D * dt * (C[i+1] - 2*C[i] + C[i-1]) / dx**2 
-            
-            # Boundary conditions
-            C_new[0] = C_eq
-            C_new[-1] = 0
-            
-            # Store results
-            C = C_new.copy()
-            C_surface[n, :] = C
-            
-            # Calculate flux at x=L
-            flux_values[n] = -D * (C[-1] - C[-2]) / dx
+        # Solve PDE using helper method
+        t, x, C_full, flux_values = self._solve_pde(
+            D=D, C_eq=C_eq, L=L, T=T, N=N, t_eval=t_eval
+        )
         
         # Create DataFrames
-        df_C = pd.DataFrame(C_surface, columns=[f'x={x_i:.3f}' for x_i in x])
+        df_C = pd.DataFrame(C_full, columns=[f'x={x_i:.3f}' for x_i in x])
         df_C.index = t
         df_flux = pd.DataFrame({'time': t, 'flux': flux_values})
         

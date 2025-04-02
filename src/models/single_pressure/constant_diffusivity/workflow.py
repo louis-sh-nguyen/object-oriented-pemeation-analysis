@@ -93,13 +93,15 @@ def time_lag_analysis_workflow(
     )
     
     if model.results.get('diffusivity') and model.results.get('equilibrium_concentration'):
+        # Solve diffusion PDE using solve_ivp method (more robust than finite difference)
+        # dt and dx parameters are converted to appropriate grid sizing for solve_ivp
         conc_profile, flux_data = model.solve_pde(
             D=model.results['diffusivity'],
             C_eq=model.results['equilibrium_concentration'],
             L=model.params.transport.thickness,
             T=max(processed_data['time']),
-            dt=1.0,
-            dx=0.01
+            dt=5.0,  # Larger time step is okay with solve_ivp's adaptive timestepping
+            dx=model.params.transport.thickness/100  # Use relative spatial resolution
         )
         
         plot_concentration_profile(

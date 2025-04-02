@@ -52,7 +52,8 @@ def manual_workflow(
         'T': 10e3,  # total time [s]
         'dx': 0.002,   # spatial step [adim]
         'X': 1.0,      # normalized position
-        'use_full_jacobian': True
+        'rel_tol': 1e-8,  # relative tolerance
+        'atol': 1e-9    # absolute tolerance
     },
     output_settings: Dict[str, Any] = {
         'output_dir': None,
@@ -85,8 +86,10 @@ def manual_workflow(
     simulation_params : dict, optional
         Dictionary containing simulation parameters:
         - T: total time [s]
-        - dt: time step [s]
+        - dt: initial time step [s]
         - dx: spatial step [adim]
+        - rel_tol: relative tolerance (default 1e-8)
+        - atol: absolute tolerance (default rel_tol*0.1)
     experimental_data : pd.DataFrame, optional
         Experimental flux data for comparison
     output_settings : dict, optional
@@ -110,7 +113,7 @@ def manual_workflow(
         Dictionary containing figure objects for each plot
     """
     # Use default settings with any overrides
-    sim_params = {**DEFAULT_SIMULATION_PARAMS, **(simulation_params or {})}
+    simulation_params = {**DEFAULT_SIMULATION_PARAMS, **(simulation_params or {})}
     output_settings = {**DEFAULT_OUTPUT_SETTINGS, **(output_settings or {})}
     
     # Setup output directories
@@ -136,7 +139,6 @@ def manual_workflow(
     figures = {}
     
     # Create figure with subplots
-    # fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5)) 1x3 plot
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))    # 2x2 plot
     
     # Plot concentration profile evolution
@@ -150,7 +152,7 @@ def manual_workflow(
     plot_diffusivity_location_profile(
         diffusivity_profile=Dprime_df,
         L=thickness,
-        T=sim_params['T'],
+        T=simulation_params['T'],
         ax=ax2,
         display=False
     )
@@ -253,6 +255,8 @@ def data_fitting_workflow(
         - initial_guess: float (if mode "d1") or tuple (if mode "both")
         - bounds: tuple (if mode "d1") or tuple of tuples (if mode "both")
         - n_starts: number of multi-starts (default 1)
+        - rel_tol: relative tolerance for solver (default 1e-6)
+        - atol: absolute tolerance for solver (default rel_tol*0.1)
     output_settings : dict, optional
         Dictionary containing output settings (see defaults above)
     stabilisation_threshold : float, optional
@@ -320,7 +324,8 @@ def data_fitting_workflow(
     time.sleep(0.5)
     print("Fitting completed. Fitting Results:")
     for key, value in fit_results.items():
-        print(f"{key}: {value}")
+        if key not in ['optimisation_result', 'optimisation_history']:
+            print(f"{key}: {value}")
     
     # Process the values
     if final_fitting_settings['mode'] == 'D1':
@@ -331,7 +336,7 @@ def data_fitting_workflow(
     # (Re)calculate the 'tau' column with fitted parameters
     processed_exp_data['tau'] = DT_0 * processed_exp_data['time'] / model.params.transport.thickness**2
     
-    # Run simulation with fitted parameters    
+    # Run simulation with fitted parameters using solve_ivp settings
     model, Dprime_df, flux_df, figures = manual_workflow(
         pressure=pressure,
         temperature=temperature,
@@ -345,7 +350,10 @@ def data_fitting_workflow(
             'T': processed_exp_data['time'].max(),
             'X': 1.0,
             'dx': 0.005,
-            },
+            'rel_tol': 1e-8,  # Higher accuracy for final results
+            'atol': 1e-9,
+            'dt': 0.001  # Initial time step for solver
+        },
         output_settings=output_settings
     )
     
@@ -357,14 +365,18 @@ def data_fitting_workflow(
             f'fitting_results_{timestamp}.{output_settings["data_format"]}'
         )
         if output_settings['data_format'] == 'csv':
-            pd.DataFrame([fit_results]).to_csv(results_path, index=False)
+            pd.DataFrame([{k: v for k, v in fit_results.items() 
+                          if k not in ['optimisation_result', 'optimisation_history']}]
+                        ).to_csv(results_path, index=False)
         else:
             with open(results_path, 'w') as f:
                 f.write("FVT Model Fitting Results\n")
                 f.write("========================\n\n")
-                f.write(f"D1_prime: {fit_results['D1_prime']:.4e}\n")
-                f.write(f"DT_0: {fit_results['DT_0']:.4e}\n")
+                f.write(f"D1_prime: {D1_prime:.4e}\n")
+                f.write(f"DT_0: {DT_0:.4e}\n")
                 f.write(f"RMSE: {fit_results['rmse']:.4e}\n")
+                if 'n_successful' in fit_results:
+                    f.write(f"Successful optimizations: {fit_results['n_successful']}\n")
     
     return model, fit_results, figures, Dprime_df, flux_df, processed_exp_data
 
