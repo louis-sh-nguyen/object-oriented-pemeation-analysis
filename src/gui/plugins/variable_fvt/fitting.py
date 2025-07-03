@@ -172,7 +172,7 @@ class VariableFVTFitting(ModeFrame):
         self.preset_frame.pack(fill="x")
 
         # Set default stabilisation threshold
-        self.stab_threshold.insert(0, "0.002")
+        self.stab_threshold.insert(0, "0.001")
 
     def create_fitting_options(self, parent):
         """Create fitting options section"""

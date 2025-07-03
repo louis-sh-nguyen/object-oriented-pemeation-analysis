@@ -60,7 +60,7 @@ FVT_FITTING_DEFAULTS = {
         "initial": 2.0
     },
     "DT0": {
-        "lower_bound": 1e-8,
+        "lower_bound": 1e-11,
         "upper_bound": 1e-6,
         "initial": 1e-7
     },
