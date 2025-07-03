@@ -330,11 +330,11 @@ def fit_all_data(n=None):
                 flowrate=8.0,
                 DT_0=2.8e-7,
                 D1_prime=2.0,
-                stabilisation_threshold=0.005,  # 0.005 for breakthrough curve, 0.002 for whole curve
+                stabilisation_threshold=0.001,  # 0.005 for breakthrough curve, 0.002 for whole curve
                 fitting_settings={
                     'mode': 'both',
                     'initial_guess': (2.0, 1.0e-7),
-                    'bounds': ((1.001, 20), (1.0e-8, 1.0e-6)),
+                    'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),
                     'n_starts': 3,
                 },
                 output_settings={
@@ -380,6 +380,6 @@ if __name__ == '__main__':
     # test_pde_solving()
     # test_manual_workflow()
     # test_parameter_sensitivity()
-    test_data_fitting_workflow_D1prime()
+    # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
-    # fit_all_data()
+    fit_all_data()
