@@ -20,6 +20,7 @@ from src.models.single_pressure.variable_diffusivity_fvt.workflow import (
     data_fitting_workflow,
 )
 from src.utils.dir_paths import safe_long_path
+from src.utils.defaults import TEMPERATURE_DICT, PRESSURE_DICT
 
 def test_model_creation():
     """Test different ways to create FVTModel"""
@@ -306,18 +307,13 @@ def fit_all_data(n=None):
     
     for file in data_files:
         print(f"\nProcessing {file}...")
-        data_path = os.path.join(data_dir, file)
+        data_path = os.path.join(data_dir, file)        
         
+        exp_name = file.replace('.xlsx', '')
         try:
-            # Extract temperature and pressure from filename
-            # Assuming filename format: "RUN_X_##C-##bar.xlsx"
-            try:
-                parts = file.replace('.xlsx', '').split('_')[-1].split('-')
-                temperature = float(parts[0].replace('C', ''))
-                pressure = float(parts[1].replace('bar', ''))
-            except:
-                temperature = None
-                pressure = None
+            # Get temperature and pressure
+            temperature = TEMPERATURE_DICT.get(exp_name, None)
+            pressure = PRESSURE_DICT.get(exp_name, None)
             
             # Create file-specific output directory
             file_output_dir = os.path.join(output_base_dir, file[:-5])
@@ -337,14 +333,14 @@ def fit_all_data(n=None):
                     'mode': 'both',
                     'initial_guess': (2.0, 1.0e-7), #*modify
                     'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),  #* modify
-                    'n_starts': 1,  #* modify
+                    'n_starts': 3,  #* modify
                 },
                 output_settings={
                     'output_dir': file_output_dir,
-                    'display_plots': True,
+                    'display_plots': False,
                     'save_plots': True,
                     'save_data': True,
-                    'plot_format': 'png',
+                    'plot_format': 'pdf',
                     'data_format': 'csv'
                 }
             )
@@ -390,4 +386,4 @@ if __name__ == '__main__':
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
     # Change the working directory to the script's location
-    fit_all_data(n=1)
+    fit_all_data(n=None)

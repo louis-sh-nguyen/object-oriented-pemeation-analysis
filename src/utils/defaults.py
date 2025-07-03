@@ -76,3 +76,49 @@ CONSTANT_D_FITTING_DEFAULTS = {
     },
     "n_starts": 1
 }
+
+# Temperature mapping for samples
+TEMPERATURE_DICT = {
+    'RUN_H_25C-50bar': 25.0, 
+    'RUN_H_25C-100bar_7': 25.0, 
+    'RUN_H_25C-100bar_8': 25.0, 
+    'RUN_H_25C-100bar_9': 25.0, 
+    'RUN_H_25C-200bar_2': 25.0,
+    'RUN_H_50C-50bar': 50.0, 
+    'RUN_H_50C-100bar_2': 50.0, 
+    'RUN_H_50C-200bar': 50.0, 
+    'RUN_H_75C-50bar': 75.0, 
+    'RUN_H_75C-100bar': 75.0,
+    
+    'S3R1': 115, 
+    'S3R2': 115, 
+    'S3R3': 115, 
+    'S3R4': 115, 
+    'S4R3': 25, 
+    'S4R4': 50, 
+    'S4R5': 75, 
+    'S4R6': 50,
+}
+
+# Pressure mapping for samples
+PRESSURE_DICT = {
+    'RUN_H_25C-50bar': 50.0, 
+    'RUN_H_25C-100bar_7': 100.0, 
+    'RUN_H_25C-100bar_8': 100.0, 
+    'RUN_H_25C-100bar_9': 100.0, 
+    'RUN_H_25C-200bar_2': 200.0,
+    'RUN_H_50C-50bar': 50.0, 
+    'RUN_H_50C-100bar_2': 100.0, 
+    'RUN_H_50C-200bar': 200.0, 
+    'RUN_H_75C-50bar': 50.0, 
+    'RUN_H_75C-100bar': 100.0,
+    
+    'S3R1': 100, 
+    'S3R2': 200, 
+    'S3R3': 300, 
+    'S3R4': 100, 
+    'S4R3': 25, 
+    'S4R4': 50, 
+    'S4R5': 50, 
+    'S4R6': 50,
+} # [bar]
