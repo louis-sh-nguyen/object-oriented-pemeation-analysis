@@ -3,6 +3,7 @@ from typing import Dict, Optional, Tuple, Any
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+from pathlib import Path
 from ....utils.data_processing import preprocess_data
 from ..variable_diffusivity_fvt import FVTModel
 import time
@@ -12,6 +13,7 @@ from ..variable_diffusivity_fvt.plotting import (
     plot_norm_flux_over_tau,
     plot_norm_flux_over_time
 )
+from ....utils.dir_paths import safe_long_path
 
 # Default settings dictionaries
 DEFAULT_SIMULATION_PARAMS = {
@@ -116,10 +118,14 @@ def manual_workflow(
     simulation_params = {**DEFAULT_SIMULATION_PARAMS, **(simulation_params or {})}
     output_settings = {**DEFAULT_OUTPUT_SETTINGS, **(output_settings or {})}
     
+    # Always create timestamp
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    
     # Setup output directories
     if output_settings.get('output_dir'):
         os.makedirs(output_settings['output_dir'], exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    time.sleep(0.5)  # Small delay for better timing in outputs
     
     # Initialize model
     model = FVTModel.from_parameters(
@@ -181,23 +187,31 @@ def manual_workflow(
             output_settings['output_dir'], 
             f'fvt_analysis_summary_{timestamp}.{output_settings["plot_format"]}'
         )
+        plot_path = safe_long_path(plot_path)
         fig.savefig(plot_path, dpi=300, bbox_inches='tight')
     
     if output_settings['save_data'] and output_settings.get('output_dir'):
         if output_settings['data_format'] == 'csv':
-            Dprime_df.to_csv(os.path.join(
+            datapath = os.path.join(
                 output_settings['output_dir'], 
                 f'diffusivity_profile_{timestamp}.csv'
-            ))
-            flux_df.to_csv(os.path.join(
+            )
+            datapath = safe_long_path(datapath)
+            Dprime_df.to_csv(datapath)
+            
+            flux_path = os.path.join(
                 output_settings['output_dir'], 
                 f'flux_evolution_{timestamp}.csv'
-            ))
+            )
+            flux_path = safe_long_path(flux_path)
+            flux_df.to_csv(flux_path)
         elif output_settings['data_format'] == 'excel':
-            with pd.ExcelWriter(os.path.join(
+            datapath = os.path.join(
                 output_settings['output_dir'], 
                 f'fvt_results_{timestamp}.xlsx'
-            )) as writer:
+            )
+            datapath = safe_long_path(datapath)
+            with pd.ExcelWriter(datapath) as writer:
                 Dprime_df.to_excel(writer, sheet_name='diffusivity_profile')
                 flux_df.to_excel(writer, sheet_name='flux_evolution')
     
@@ -364,6 +378,7 @@ def data_fitting_workflow(
             output_settings['output_dir'], 
             f'fitting_results_{timestamp}.{output_settings["data_format"]}'
         )
+        results_path = safe_long_path(results_path)
         if output_settings['data_format'] == 'csv':
             pd.DataFrame([{k: v for k, v in fit_results.items() 
                           if k not in ['optimisation_result', 'optimisation_history']}]

@@ -17,8 +17,9 @@ from src.models.single_pressure.variable_diffusivity_fvt.plotting import (
 )
 from src.models.single_pressure.variable_diffusivity_fvt.workflow import (
     manual_workflow,
-    data_fitting_workflow
+    data_fitting_workflow,
 )
+from src.utils.dir_paths import safe_long_path
 
 def test_model_creation():
     """Test different ways to create FVTModel"""
@@ -289,7 +290,8 @@ def fit_all_data(n=None):
     # Create timestamp-based output directory
     from datetime import datetime
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    output_base_dir = f'outputs/fitting/{timestamp}_breakthrough'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_base_dir = os.path.join(base_dir, f'outputs/fitting/{timestamp}')
     os.makedirs(output_base_dir, exist_ok=True)
     
     # List all xlsx files in the data directory
@@ -333,16 +335,16 @@ def fit_all_data(n=None):
                 stabilisation_threshold=0.001,  # 0.005 for breakthrough curve, 0.002 for whole curve
                 fitting_settings={
                     'mode': 'both',
-                    'initial_guess': (2.0, 1.0e-7),
-                    'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),
-                    'n_starts': 3,
+                    'initial_guess': (2.0, 1.0e-7), #*modify
+                    'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),  #* modify
+                    'n_starts': 1,  #* modify
                 },
                 output_settings={
                     'output_dir': file_output_dir,
-                    'display_plots': False,
+                    'display_plots': True,
                     'save_plots': True,
                     'save_data': True,
-                    'plot_format': 'svg',
+                    'plot_format': 'png',
                     'data_format': 'csv'
                 }
             )
@@ -371,15 +373,21 @@ def fit_all_data(n=None):
             }
     
     # Save overall results to CSV in timestamp directory
+    results_path = os.path.join(output_base_dir, 'all_results.csv')
+    results_path = safe_long_path(results_path)
     results_df = pd.DataFrame.from_dict(all_results, orient='index')
-    results_df.to_csv(os.path.join(output_base_dir, 'all_results.csv'), index=False)
+    results_df.to_csv(results_path, index=False)
     print(f"\nCompleted processing all files. Results saved to {output_base_dir}")
 
 if __name__ == '__main__':
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+    print(f"Working directory set to: {os.getcwd()}")
     # test_model_creation()
     # test_pde_solving()
     # test_manual_workflow()
     # test_parameter_sensitivity()
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
-    fit_all_data()
+    # Change the working directory to the script's location
+    fit_all_data(n=1)
