@@ -409,7 +409,8 @@ class FVTModel(PermeationModel):
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Data is missing required columns: {missing_cols}")
-            return self._fit_D1prime_DT0(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts)
+            return self._fit_D1prime_DT0(data, initial_guess=initial_guess, bounds=bounds, n_starts=n_starts, 
+                                        exploitation_weight=exploitation_weight)
         else:
             raise ValueError("Invalid mode. Choose 'D1' or 'both'.")
         
@@ -518,10 +519,33 @@ class FVTModel(PermeationModel):
     def _fit_D1prime_DT0(self, data: pd.DataFrame, 
                          initial_guess: Tuple=(5.0, 1e-7),
                          bounds: Tuple=((1.01, 100), (1e-8, 1e-5)),
-                         n_starts: int=1) -> dict:
+                         n_starts: int=1,
+                         exploitation_weight: float=0.7) -> dict:
         """
         Multi-stage parameter fitting strategy using solve_ivp with progressively finer tolerances
+        and multi-start optimization for robustness.
+        
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Experimental data with 'time' and 'normalised_flux' columns
+        initial_guess : Tuple
+            Initial guess for (D1_prime, DT_0)
+        bounds : Tuple
+            Bounds for (D1_prime, DT_0)
+        n_starts : int
+            Number of multi-start optimizations
+        exploitation_weight : float
+            Balance between exploitation (1.0) and exploration (0.0)
+            
+        Returns
+        -------
+        dict
+            Dictionary containing fitted parameters and optimization results
         """
+        if not isinstance(n_starts, int) or n_starts < 1:
+            raise ValueError("n_starts must be an integer greater than or equal to 1")
+        
         stages = [
             # (dx, rel_tol)
             (0.02, 1e-6),   # Stage 1: Very coarse
@@ -531,11 +555,12 @@ class FVTModel(PermeationModel):
         
         best_result = None
         best_rmse = np.inf
-        current_guess = initial_guess
+        successful_params = []
+        last_rmse = [float('inf')]
         
-        for stage, (dx, tol) in enumerate(stages, 1):
-            def objective(params):
-                D1_prime, DT_0 = params
+        def objective(params, dx, tol, stage):
+            D1_prime, DT_0 = params
+            try:
                 _, flux_df = self._solve_pde(
                     L=self.params.transport.thickness,
                     D1_prime=D1_prime, 
@@ -549,32 +574,84 @@ class FVTModel(PermeationModel):
                 )
                 model_flux = np.interp(data['time'], flux_df['time'], 
                                      flux_df['normalised_flux'])
-                return np.sqrt(np.mean((data['normalised_flux'] - model_flux) ** 2))
+                rmse = np.sqrt(np.mean((data['normalised_flux'] - model_flux) ** 2))
+                last_rmse[0] = rmse
+                return rmse
+            except Exception as e:
+                # Return large error if simulation fails
+                return 1e6
+        
+        # Perform multi-start optimization
+        for i in range(n_starts):
+            # Determine starting point using exploration vs exploitation
+            if i == 0 or not successful_params or np.random.random() > exploitation_weight:
+                # Exploration: Use initial guess or random values
+                if i == 0:
+                    current_guess = initial_guess
+                else:
+                    # Generate random starting point within bounds
+                    current_guess = (
+                        np.random.uniform(bounds[0][0], bounds[0][1]),  # D1_prime
+                        np.random.uniform(bounds[1][0], bounds[1][1])   # DT_0
+                    )
+            else:
+                # Exploitation: Sample near successful previous results
+                base_params = successful_params[np.random.randint(len(successful_params))]
+                # Add random perturbation (10% of parameter range)
+                d1_range = bounds[0][1] - bounds[0][0]
+                dt_range = bounds[1][1] - bounds[1][0]
+                perturbation = (
+                    np.random.normal(0, 0.1 * d1_range),
+                    np.random.normal(0, 0.1 * dt_range)
+                )
+                current_guess = (
+                    np.clip(base_params[0] + perturbation[0], bounds[0][0], bounds[0][1]),
+                    np.clip(base_params[1] + perturbation[1], bounds[1][0], bounds[1][1])
+                )
             
-            # Optimize with current settings
-            result = minimize(
-                objective,
-                x0=current_guess,
-                method='L-BFGS-B',
-                bounds=bounds,
-                options={
-                    'ftol': tol,
-                    'gtol': tol,
-                    'maxiter': 50 if stage < 3 else 100
-                }
-            )
+            # Multi-stage optimization for current starting point
+            stage_guess = current_guess
+            stage_best_result = None
+            stage_best_rmse = np.inf
             
-            # Update best result if improved
-            if result.fun < best_rmse:
-                best_rmse = result.fun
-                best_result = result
+            for stage, (dx, tol) in enumerate(stages, 1):
+                def stage_objective(params):
+                    return objective(params, dx, tol, stage)
                 
-            # Use current result as initial guess for next stage
-            current_guess = result.x
+                # Optimize with current stage settings
+                result = minimize(
+                    stage_objective,
+                    x0=stage_guess,
+                    method='L-BFGS-B',
+                    bounds=bounds,
+                    options={
+                        'ftol': tol,
+                        'gtol': tol,
+                        'maxiter': 50 if stage < 3 else 100
+                    }
+                )
+                
+                # Update stage best result if improved
+                if result.success and result.fun < stage_best_rmse:
+                    stage_best_rmse = result.fun
+                    stage_best_result = result
+                    
+                # Use current result as initial guess for next stage
+                stage_guess = result.x if result.success else stage_guess
             
+            # Track successful parameters for exploitation
+            if stage_best_result is not None and stage_best_result.success:
+                successful_params.append(stage_best_result.x)
+            
+            # Update global best result
+            if stage_best_result is not None and stage_best_rmse < best_rmse:
+                best_rmse = stage_best_rmse
+                best_result = stage_best_result
+        
         return {
-            'D1_prime': best_result.x[0],
-            'DT_0': best_result.x[1],
+            'D1_prime': best_result.x[0] if best_result is not None else initial_guess[0],
+            'DT_0': best_result.x[1] if best_result is not None else initial_guess[1],
             'rmse': best_rmse,
-            'optimisation_result': best_result
+            'optimisation_result': best_result,
+            'n_successful': len(successful_params)
         }
