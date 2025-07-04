@@ -109,7 +109,7 @@ def manual_workflow(
             if experimental_data is not None:
                 # Experimental data
                 experimental_data.to_csv(
-                    safe_long_path(os.path.join(output_settings['output_dir'], f'raw_data_{timestamp}.csv')),
+                    safe_long_path(os.path.join(output_settings['output_dir'], f'experimental_data_{timestamp}.csv')),
                     index=False
                 )
 
