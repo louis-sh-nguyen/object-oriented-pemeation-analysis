@@ -1,6 +1,7 @@
 import os
 import json
 from matplotlib import pyplot as plt
+import numpy as np
 import pandas as pd
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
@@ -196,6 +197,7 @@ def data_fitting_workflow(
         },
         output_settings=output_settings
     )
+    
     # Generate results dictionary
     results_dict = {
         'parameters': {
@@ -222,7 +224,18 @@ def data_fitting_workflow(
         }
     }
 
+    # Link model results to results_dict (same object im memory)
     fit_results = model.results
+
+    # Calculate RMSE if flux is available
+    if 'flux' in processed_exp_data.columns:
+        model_flux = np.interp(
+            processed_exp_data['time'],
+            flux_data['time'],
+            flux_data['flux']
+        )
+        rmse = np.sqrt(np.mean((processed_exp_data['flux'] - model_flux) ** 2))
+        fit_results['rmse'] = rmse
     
     # Generate plots
     plot_timelag_analysis(

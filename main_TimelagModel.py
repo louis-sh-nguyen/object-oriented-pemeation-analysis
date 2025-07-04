@@ -165,6 +165,7 @@ def fit_all_data(n=None):
                 'diffusivity': model_with_results.results.get('diffusivity', None),
                 'permeability': model_with_results.results.get('permeability', None),                
                 'equilibrium_concentration': model_with_results.results.get('equilibrium_concentration', None),
+                'rmse': model_with_results.results.get('rmse', None),
             }
             
             # Print results for each file
