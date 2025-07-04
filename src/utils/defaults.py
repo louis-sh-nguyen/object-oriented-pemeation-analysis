@@ -8,7 +8,29 @@ DEFAULTS = {
     "thickness": 0.1,       # mm
 }
 
-# Sample-specific thickness mappings
+# Sample-specific diameter mappings
+DIAMETER_DICT = {
+    'RUN_H_25C-50bar': 1.0,
+    'RUN_H_25C-100bar_7': 1.0,
+    'RUN_H_25C-100bar_8': 1.0,
+    'RUN_H_25C-100bar_9': 1.0,
+    'RUN_H_25C-200bar_2': 1.0,
+    'RUN_H_50C-50bar': 1.0,
+    'RUN_H_50C-100bar_2': 1.0,
+    'RUN_H_50C-200bar': 1.0,
+    'RUN_H_75C-50bar': 1.0,
+    'RUN_H_75C-100bar': 1.0,
+    'S3R1': 1.0,
+    'S3R2': 1.0,
+    'S3R3': 1.0,
+    'S3R4': 1.0,
+    'S4R3': 1.3,
+    'S4R4': 1.3,
+    'S4R5': 1.3,
+    'S4R6': 1.3,
+}   # [cm]
+
+# Sample-specific thickness mappings 
 THICKNESS_DICT = {
     'RUN_H_25C-50bar': 0.1, 
     'RUN_H_25C-100bar_7': 0.1, 
