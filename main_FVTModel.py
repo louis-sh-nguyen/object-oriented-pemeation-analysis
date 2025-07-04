@@ -314,9 +314,10 @@ def fit_all_data(n=None):
             # Get temperature and pressure
             temperature = TEMPERATURE_DICT.get(exp_name, None)
             pressure = PRESSURE_DICT.get(exp_name, None)
-            thickness = THICKNESS_DICT.get(exp_name, 0.1)  # Default thickness if not found
-            diameter = DIAMETER_DICT.get(exp_name, 1.0)  # Default diameter if not found
-            flowrate = FLOWRATE_DICT.get(exp_name, 8.0)  # Default
+            thickness = THICKNESS_DICT.get(exp_name, 0.1)
+            diameter = DIAMETER_DICT.get(exp_name, 1.0)
+            flowrate = FLOWRATE_DICT.get(exp_name, 8.0)
+            
             # Create file-specific output directory
             file_output_dir = os.path.join(output_base_dir, file[:-5])
             

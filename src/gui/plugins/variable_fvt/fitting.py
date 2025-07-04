@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog
 from ...base_frame import ModeFrame
-from ....utils.defaults import DEFAULTS, THICKNESS_DICT, FLOWRATE_DICT, FVT_FITTING_DEFAULTS
+from ....utils.defaults import DEFAULTS, DIAMETER_DICT, THICKNESS_DICT, FLOWRATE_DICT, TEMPERATURE_DICT, PRESSURE_DICT, FVT_FITTING_DEFAULTS
 from ....models.single_pressure.variable_diffusivity_fvt.workflow import data_fitting_workflow
 from ....models.single_pressure.variable_diffusivity_fvt.plotting import (
     plot_diffusivity_profile,
@@ -641,16 +641,37 @@ class VariableFVTFitting(ModeFrame):
                 self.parameter_entries["thickness"].delete(0, "end")
                 self.parameter_entries["thickness"].insert(0, str(thickness))
             
+            # Update diameter if available
+            if base_name in DIAMETER_DICT:
+                diameter = DIAMETER_DICT[base_name]
+                print(f"Setting diameter to: {diameter}")  # Debug print
+                self.parameter_entries["diameter"].delete(0, "end")
+                self.parameter_entries["diameter"].insert(0, str(diameter))
+            
             # Update flowrate if available
             if base_name in FLOWRATE_DICT:
                 flowrate = FLOWRATE_DICT[base_name]
                 print(f"Setting flowrate to: {flowrate}")  # Debug print
                 self.parameter_entries["flowrate"].delete(0, "end")
                 self.parameter_entries["flowrate"].insert(0, str(flowrate))
-                
+            
+            # Update pressure if available
+            if base_name in PRESSURE_DICT:
+                pressure = PRESSURE_DICT[base_name]
+                print(f"Setting pressure to: {pressure}")  # Debug print
+                self.parameter_entries["pressure"].delete(0, "end")
+                self.parameter_entries["pressure"].insert(0, str(pressure))
+            
+            # Update temperature if available
+            if base_name in TEMPERATURE_DICT:
+                temperature = TEMPERATURE_DICT[base_name]
+                print(f"Setting temperature to: {temperature}")  # Debug print
+                self.parameter_entries["temperature"].delete(0, "end")
+                self.parameter_entries["temperature"].insert(0, str(temperature))
+            
             # Default diameter remains constant
-            self.parameter_entries["diameter"].delete(0, "end")
-            self.parameter_entries["diameter"].insert(0, str(DEFAULTS["diameter"]))
+            # self.parameter_entries["diameter"].delete(0, "end")
+            # self.parameter_entries["diameter"].insert(0, str(DEFAULTS["diameter"]))
             
             self.update_idletasks()  # Force GUI update
             
