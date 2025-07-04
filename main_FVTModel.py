@@ -372,7 +372,7 @@ def fit_all_data(n=None):
             }
     
     # Save overall results to CSV in timestamp directory
-    results_path = os.path.join(output_base_dir, 'all_results.csv')
+    results_path = os.path.join(output_base_dir, 'fvt_all_results.csv')
     results_path = safe_long_path(results_path)
     results_df = pd.DataFrame.from_dict(all_results, orient='index')
     results_df.to_csv(results_path, index=False)

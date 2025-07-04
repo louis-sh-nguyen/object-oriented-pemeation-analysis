@@ -150,7 +150,7 @@ def data_fitting_workflow(
     model.fit_to_data(processed_exp_data)
     
     # Call manual_workflow to run the model with the fitted parameters
-    model, conc_profile, flux_data, figures = manual_workflow(
+    _, conc_profile, flux_data, figures = manual_workflow(
         model=model,
         processed_exp_data=processed_exp_data,
         simulation_params={

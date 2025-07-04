@@ -28,7 +28,7 @@ from .plotting import (
     plot_concentration_profile,
     plot_flux_over_time
 )
-from .workflow import time_lag_analysis_workflow
+from .workflow import manual_workflow, data_fitting_workflow
 
 __version__ = '0.1.0'
 
@@ -43,7 +43,8 @@ __all__ = [
     'TimelagModel',
     
     # Analysis workflow
-    'time_lag_analysis_workflow',
+    'manual_workflow',
+    'data_fitting_workflow',
     
     # Plotting functions
     'plot_timelag_analysis',
