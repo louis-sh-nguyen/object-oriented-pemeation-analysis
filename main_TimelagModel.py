@@ -1,13 +1,15 @@
+from datetime import datetime
 import os
 import pandas as pd
 from src.models.single_pressure.constant_diffusivity import (
     TimelagModel,
     TimelagModelParameters,
     TimelagTransportParams,
-    time_lag_analysis_workflow,
-    plot_timelag_analysis
+    data_fitting_workflow,
 )
 from src.models.base_parameters import BaseParameters
+from src.utils.dir_paths import safe_long_path
+from src.utils.defaults import TEMPERATURE_DICT, PRESSURE_DICT, DIAMETER_DICT, THICKNESS_DICT, FLOWRATE_DICT
 
 def test_model_creation():
     """Test different ways to create TimelagModel"""
@@ -77,7 +79,7 @@ def test_full_workflow():
     data_dir = os.path.join(os.path.dirname(__file__), 'data', 'single_pressure')
     file_path = os.path.join(data_dir, 'RUN_H_25C-50bar.xlsx')
     
-    results = time_lag_analysis_workflow(
+    results = data_fitting_workflow(
         file_path=file_path,
         pressure=50.0,
         temperature=25.0,
@@ -97,7 +99,100 @@ def test_full_workflow():
         if isinstance(value, float):
             print(f"{param}: {value:.4e}")
 
+def fit_all_data(n=None):
+    """Fit all data in the single pressure directory"""
+    data_dir = 'data/single_pressure'
+    
+    # Create timestamp-based output directory
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_base_dir = os.path.join(base_dir, f'outputs/fitting/{timestamp}')
+    os.makedirs(output_base_dir, exist_ok=True)
+    
+    # List all xlsx files in the data directory
+    data_files = [f for f in os.listdir(data_dir) if f.endswith('.xlsx')]
+    
+    # Limit number of files to process
+    if n is not None:
+        data_files = data_files[:n]
+    
+    # Store results for all files
+    all_results = {}
+    
+    for file in data_files:
+        print(f"\nProcessing {file}...")
+        data_path = safe_long_path(os.path.join(data_dir, file))
+        exp_name = file.replace('.xlsx', '')
+        try:
+            # Get temperature and pressure
+            temperature = TEMPERATURE_DICT.get(exp_name, None)
+            pressure = PRESSURE_DICT.get(exp_name, None)
+            thickness = THICKNESS_DICT.get(exp_name, 0.1)
+            diameter = DIAMETER_DICT.get(exp_name, 1.0)
+            flowrate = FLOWRATE_DICT.get(exp_name, 8.0)
+            
+            # Create file-specific output directory
+            file_output_dir = os.path.join(output_base_dir, file[:-5])
+
+            # Run workflow
+            model_with_results, results_dict, figures, conc_profile, flux_data, processed_exp_data = data_fitting_workflow(
+                file_path=data_path,
+                pressure=pressure,
+                temperature=temperature,
+                thickness=thickness,
+                diameter=diameter,
+                flowrate=flowrate,
+                stabilisation_threshold=0.001,  # 0.005 for breakthrough curve, 0.002 for whole curve
+                output_settings={
+                    'output_dir': file_output_dir,
+                    'display_plots': False,
+                    'save_plots': True,
+                    'save_data': True,
+                    'plot_format': 'pdf',
+                    'data_format': 'csv',
+                }
+            )
+            
+            # Store results
+            all_results[file] = {
+                'file_name': file,
+                'temperature': model_with_results.params.base.temperature,
+                'pressure': model_with_results.params.base.pressure,
+                'thickness': model_with_results.params.transport.thickness,
+                'diameter': model_with_results.params.transport.diameter,
+                'flowrate': model_with_results.params.transport.flowrate,
+                'timelag': model_with_results.results.get('time_lag', None),
+                'diffusivity': model_with_results.results.get('diffusivity', None),
+                'permeability': model_with_results.results.get('permeability', None),                
+                'equilibrium_concentration': model_with_results.results.get('equilibrium_concentration', None),
+            }
+            
+            # Print results for each file
+            print(f"Successfully fitted {file}")
+            for key, value in all_results[file].items():
+                print(f"{key}: {value}")            
+                print('')
+        
+        except Exception as e:
+            print(f"Error processing {file}: {e}")
+            all_results[file] = {
+                'file_name': file,
+                'error': str(e)
+            }
+    
+    # Save overall results to CSV in timestamp directory
+    results_path = os.path.join(output_base_dir, 'timelag_all_results.csv')
+    results_path = safe_long_path(results_path)
+    results_df = pd.DataFrame.from_dict(all_results, orient='index')
+    results_df.to_csv(results_path, index=False)
+    print(f"\nCompleted processing all files. Results saved to {output_base_dir}")
+
 if __name__ == '__main__':
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+    print(f"Working directory set to: {os.getcwd()}")
+    
     # test_model_creation()
     # test_data_fitting()
-    test_full_workflow()
+    # test_full_workflow()
+    fit_all_data(n=1)  # Adjust n to limit number of files processed

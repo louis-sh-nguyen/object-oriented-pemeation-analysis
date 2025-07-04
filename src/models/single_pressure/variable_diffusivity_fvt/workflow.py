@@ -190,8 +190,18 @@ def manual_workflow(
         plot_path = safe_long_path(plot_path)
         fig.savefig(plot_path, dpi=300, bbox_inches='tight')
     
+    # Export data
     if output_settings['save_data'] and output_settings.get('output_dir'):
         if output_settings['data_format'] == 'csv':
+            # Export experimental data if provided
+            if experimental_data is not None:
+                exp_data_path = os.path.join(
+                    output_settings['output_dir'], 
+                    f'experimental_data_{timestamp}.csv'
+                )
+                exp_data_path = safe_long_path(exp_data_path)
+                experimental_data.to_csv(exp_data_path, index=False)
+            # Export diffusivity profile 
             datapath = os.path.join(
                 output_settings['output_dir'], 
                 f'diffusivity_profile_{timestamp}.csv'
@@ -199,6 +209,7 @@ def manual_workflow(
             datapath = safe_long_path(datapath)
             Dprime_df.to_csv(datapath)
             
+            # Export flux evolution
             flux_path = os.path.join(
                 output_settings['output_dir'], 
                 f'flux_evolution_{timestamp}.csv'

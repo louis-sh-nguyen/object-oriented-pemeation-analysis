@@ -336,7 +336,7 @@ def fit_all_data(n=None):
                     'mode': 'both',
                     'initial_guess': (2.0, 1.0e-7), #*modify
                     'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),  #* modify
-                    'n_starts': 5,  #* modify
+                    'n_starts': 1,  #* modify
                 },
                 output_settings={
                     'output_dir': file_output_dir,
@@ -372,7 +372,7 @@ def fit_all_data(n=None):
             }
     
     # Save overall results to CSV in timestamp directory
-    results_path = os.path.join(output_base_dir, 'all_results.csv')
+    results_path = os.path.join(output_base_dir, 'fvt_all_results.csv')
     results_path = safe_long_path(results_path)
     results_df = pd.DataFrame.from_dict(all_results, orient='index')
     results_df.to_csv(results_path, index=False)
@@ -389,4 +389,4 @@ if __name__ == '__main__':
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
     # Change the working directory to the script's location
-    fit_all_data(n=None)
+    fit_all_data(n=1)

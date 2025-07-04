@@ -220,4 +220,8 @@ def preprocess_data(data: pd.DataFrame,
         
         # Add stabilisation time to metadata
         df.attrs['stabilisation_time'] = stab_time
-    return df
+    
+    # Columns to retain
+    columns_to_keep = ['time', 'flux', 'cumulative_flux', 'normalised_flux', 'yCO2_bl']
+    
+    return df[columns_to_keep]

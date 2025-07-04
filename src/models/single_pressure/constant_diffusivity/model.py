@@ -7,8 +7,7 @@ from scipy.integrate import solve_ivp
 from ...base_model import PermeationModel
 from ...base_parameters import BaseParameters
 from .parameters import TimelagModelParameters, TimelagTransportParams
-from ....utils.time_analysis import find_stabilisation_time, find_time_lag
-from ....utils.data_processing import preprocess_data
+from ....utils.time_analysis import find_stabilisation_time, find_time_lag, identify_start_time
 
 class TimelagModel(PermeationModel):
     """Time-lag analysis model for constant diffusivity permeation"""
@@ -43,15 +42,8 @@ class TimelagModel(PermeationModel):
         
         return cls(TimelagModelParameters(base=base_params, transport=transport_params))
 
-    def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_to_data(self, processed_data: pd.DataFrame) -> pd.DataFrame:
         """Fit model to experimental data"""
-        processed_data = preprocess_data(
-            data,
-            thickness=self.params.transport.thickness,
-            diameter=self.params.transport.diameter,
-            temperature=self.params.base.temperature,
-            flowrate=self.params.transport.flowrate
-        )
         
         self.calculate_diffusivity(processed_data)
         self.calculate_permeability(processed_data)
@@ -64,15 +56,16 @@ class TimelagModel(PermeationModel):
         """Calculate diffusion coefficient [cm² s⁻¹]"""
         if self.params.transport.diffusivity is not None:
             return self.params.transport.diffusivity
-            
-        stab_time = find_stabilisation_time(data, flux_col='normalised_flux')
-        time_lag, stats = find_time_lag(data, stab_time)
+        
+        # Start of linear region of cumulative flux
+        stab_start_time = identify_start_time(data, column='cumulative_flux')
+        time_lag, stats = find_time_lag(data, stab_start_time)
         
         D = self.params.transport.thickness**2 / (6 * time_lag)
         
         self.results.update({
             'time_lag': time_lag,
-            'stabilisation_time': stab_time,
+            'stabilisation_time': stab_start_time,
             'diffusivity': D
         })
         

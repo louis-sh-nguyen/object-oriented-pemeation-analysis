@@ -32,7 +32,7 @@ from .single_pressure.constant_diffusivity import (
     plot_timelag_analysis,
     plot_concentration_profile,
     plot_flux_over_time,
-    time_lag_analysis_workflow
+    data_fitting_workflow,
 )
 
 __version__ = '0.1.0'
@@ -50,7 +50,7 @@ __all__ = [
     'TimelagTransportParams',
     
     # Analysis functions
-    'time_lag_analysis_workflow',
+    'data_fitting_workflow',
     
     # Plotting functions
     'plot_timelag_analysis',
