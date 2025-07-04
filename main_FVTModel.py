@@ -20,7 +20,7 @@ from src.models.single_pressure.variable_diffusivity_fvt.workflow import (
     data_fitting_workflow,
 )
 from src.utils.dir_paths import safe_long_path
-from src.utils.defaults import TEMPERATURE_DICT, PRESSURE_DICT
+from src.utils.defaults import TEMPERATURE_DICT, PRESSURE_DICT, DIAMETER_DICT, THICKNESS_DICT, FLOWRATE_DICT
 
 def test_model_creation():
     """Test different ways to create FVTModel"""
@@ -314,7 +314,9 @@ def fit_all_data(n=None):
             # Get temperature and pressure
             temperature = TEMPERATURE_DICT.get(exp_name, None)
             pressure = PRESSURE_DICT.get(exp_name, None)
-            
+            thickness = THICKNESS_DICT.get(exp_name, 0.1)  # Default thickness if not found
+            diameter = DIAMETER_DICT.get(exp_name, 1.0)  # Default diameter if not found
+            flowrate = FLOWRATE_DICT.get(exp_name, 8.0)  # Default
             # Create file-specific output directory
             file_output_dir = os.path.join(output_base_dir, file[:-5])
             
@@ -323,9 +325,9 @@ def fit_all_data(n=None):
                 data_path=data_path,
                 pressure=pressure,
                 temperature=temperature,
-                thickness=0.1,
-                diameter=1.0,
-                flowrate=8.0,
+                thickness=thickness,
+                diameter=diameter,
+                flowrate=flowrate,
                 DT_0=2.8e-7,
                 D1_prime=2.0,
                 stabilisation_threshold=0.001,  # 0.005 for breakthrough curve, 0.002 for whole curve

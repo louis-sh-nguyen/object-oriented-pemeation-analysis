@@ -74,31 +74,6 @@ FLOWRATE_DICT = {
     'S4R6': 10,
 }  # [ml min^-1]
 
-# Default fitting parameters for Variable FVT model
-FVT_FITTING_DEFAULTS = {
-    "D1_prime": {
-        "lower_bound": 1.001,
-        "upper_bound": 20.0,
-        "initial": 2.0
-    },
-    "DT0": {
-        "lower_bound": 1e-11,
-        "upper_bound": 1e-6,
-        "initial": 1e-7
-    },
-    "n_starts": 1
-}
-
-# Default fitting parameters for Constant Diffusivity model
-CONSTANT_D_FITTING_DEFAULTS = {
-    "D0": {
-        "lower_bound": 1e-13,
-        "upper_bound": 1e-11,
-        "initial": 1e-12
-    },
-    "n_starts": 1
-}
-
 # Temperature mapping for samples
 TEMPERATURE_DICT = {
     'RUN_H_25C-50bar': 25.0, 
@@ -144,3 +119,28 @@ PRESSURE_DICT = {
     'S4R5': 50, 
     'S4R6': 50,
 } # [bar]
+
+# Default fitting parameters for Variable FVT model
+FVT_FITTING_DEFAULTS = {
+    "D1_prime": {
+        "lower_bound": 1.001,
+        "upper_bound": 20.0,
+        "initial": 2.0
+    },
+    "DT0": {
+        "lower_bound": 1e-11,
+        "upper_bound": 1e-6,
+        "initial": 1e-7
+    },
+    "n_starts": 1
+}
+
+# Default fitting parameters for Constant Diffusivity model
+CONSTANT_D_FITTING_DEFAULTS = {
+    "D0": {
+        "lower_bound": 1e-13,
+        "upper_bound": 1e-11,
+        "initial": 1e-12
+    },
+    "n_starts": 1
+}
