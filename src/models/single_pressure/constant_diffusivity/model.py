@@ -43,15 +43,8 @@ class TimelagModel(PermeationModel):
         
         return cls(TimelagModelParameters(base=base_params, transport=transport_params))
 
-    def fit_to_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_to_data(self, processed_data: pd.DataFrame) -> pd.DataFrame:
         """Fit model to experimental data"""
-        processed_data = preprocess_data(
-            data,
-            thickness=self.params.transport.thickness,
-            diameter=self.params.transport.diameter,
-            temperature=self.params.base.temperature,
-            flowrate=self.params.transport.flowrate
-        )
         
         self.calculate_diffusivity(processed_data)
         self.calculate_permeability(processed_data)

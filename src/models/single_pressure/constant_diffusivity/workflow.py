@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Dict, Any, Optional
 from datetime import datetime
 
+from ....utils.data_processing import preprocess_data
 from .model import TimelagModel
 from .plotting import (
     plot_timelag_analysis,
@@ -11,13 +12,14 @@ from .plotting import (
     plot_flux_over_time
 )
 
-def time_lag_analysis_workflow(
+def data_fitting_workflow(
     file_path: str,
     thickness: float,
     diameter: float,
     pressure: float,
     temperature: float,
-    flowrate: Optional[float] = None,
+    flowrate: float,
+    stabilisation_threshold: Optional[float] = 0.003,
     output_settings: Dict[str, Any] = {
         'output_dir': None,
         'display_plots': True,
@@ -37,8 +39,6 @@ def time_lag_analysis_workflow(
     else:
         timestamp = None
 
-    # Load data
-    data = pd.read_excel(file_path)
     
     # Create model and fit
     model = TimelagModel.from_parameters(
@@ -48,7 +48,23 @@ def time_lag_analysis_workflow(
         diameter=diameter,
         flowrate=flowrate
     )
-    processed_data = model.fit_to_data(data)
+    
+    # Load data
+    exp_data = pd.read_excel(file_path)
+    
+    # Process data
+        # Preprocess data and calculate tau using provided stabilisation_threshold
+    processed_exp_data = preprocess_data(
+        exp_data,
+        thickness=model.params.transport.thickness,
+        diameter=model.params.transport.diameter,
+        flowrate=model.params.transport.flowrate,
+        temperature=model.params.base.temperature,
+        stabilisation_threshold=stabilisation_threshold,
+        truncate_at_stabilisation=True,
+    )
+    
+    model.fit_to_data(processed_exp_data)
     
     # Generate results dictionary
     results_dict = {
@@ -87,7 +103,7 @@ def time_lag_analysis_workflow(
     # Generate plots
     plot_timelag_analysis(
         model, 
-        processed_data,
+        processed_exp_data,
         save_path=plot_path('timelag_analysis'),
         display=output_settings.get('display_plots', True)
     )
@@ -99,7 +115,7 @@ def time_lag_analysis_workflow(
             D=model.results['diffusivity'],
             C_eq=model.results['equilibrium_concentration'],
             L=model.params.transport.thickness,
-            T=max(processed_data['time']),
+            T=max(processed_exp_data['time']),
             dt=5.0,  # Larger time step is okay with solve_ivp's adaptive timestepping
             dx=model.params.transport.thickness/100  # Use relative spatial resolution
         )
@@ -112,7 +128,7 @@ def time_lag_analysis_workflow(
         
         plot_flux_over_time(
             flux_data,
-            experimental_data=processed_data,
+            experimental_data=processed_exp_data,
             save_path=plot_path('flux_evolution'),
             display=output_settings.get('display_plots', True)
         )
@@ -121,7 +137,7 @@ def time_lag_analysis_workflow(
     if output_dir and output_settings.get('save_data'):
         data_format = output_settings.get('data_format', 'csv')
         if data_format == 'csv':
-            processed_data.to_csv(
+            processed_exp_data.to_csv(
                 os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'),
                 index=False
             )
