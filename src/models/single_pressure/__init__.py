@@ -10,7 +10,7 @@ Models:
 
 from .constant_diffusivity.model import TimelagModel
 from .constant_diffusivity.plotting import plot_timelag_analysis
-from .constant_diffusivity.workflow import time_lag_analysis_workflow
+from .constant_diffusivity.workflow import data_fitting_workflow
 
 # from .variable_concentration.model import VariableConcentrationModel
 # from .variable_concentration.plotting import plot_variable_concentration_analysis
@@ -21,7 +21,7 @@ __version__ = '0.1.0'
 __all__ = [
     'TimelagModel',
     'plot_timelag_analysis',
-    'time_lag_analysis_workflow',
+    'data_fitting_workflow',
     'VariableConcentrationModel',
     'plot_variable_concentration_analysis',
     'variable_concentration_analysis_workflow'

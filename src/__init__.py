@@ -22,7 +22,7 @@ Units:
 
 from .models.single_pressure.constant_diffusivity import (
     TimelagModel,
-    time_lag_analysis_workflow
+    data_fitting_workflow
 )
 
 from .utils.data_processing import (
@@ -38,12 +38,11 @@ from .utils.time_analysis import (
 )
 
 __version__ = '0.1.0'
-__author__ = 'Your Name'
 
 __all__ = [
     # Models
     'TimelagModel',
-    'time_lag_analysis_workflow',
+    'data_fitting_workflow',
     
     # Data processing
     'load_data',
