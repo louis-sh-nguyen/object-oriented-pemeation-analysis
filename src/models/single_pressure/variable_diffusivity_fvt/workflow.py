@@ -190,6 +190,7 @@ def manual_workflow(
         plot_path = safe_long_path(plot_path)
         fig.savefig(plot_path, dpi=300, bbox_inches='tight')
     
+    # Export data
     if output_settings['save_data'] and output_settings.get('output_dir'):
         if output_settings['data_format'] == 'csv':
             datapath = os.path.join(

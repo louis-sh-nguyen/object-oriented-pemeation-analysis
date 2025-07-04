@@ -72,6 +72,9 @@ def manual_workflow(
         dx=simulation_params['dx']  # Use relative spatial resolution
     )
     
+    # Create plots
+    figures = {}
+    
     # Create figure with subplots
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), constrained_layout=True)    # 2x1 plot
 
@@ -88,6 +91,8 @@ def manual_workflow(
         display=False
     )
     
+    figures['combined'] = fig
+    
     # Save outputs with timestamps
     if output_settings['save_plots'] and output_settings.get('output_dir'):
         plot_path = os.path.join(
@@ -96,6 +101,31 @@ def manual_workflow(
         )
         plot_path = safe_long_path(plot_path)
         fig.savefig(plot_path, dpi=300, bbox_inches='tight')
+
+    # Export data
+    if output_settings['save_data'] and output_settings.get('output_dir'):
+        data_format = output_settings.get('data_format', 'csv')
+        if data_format == 'csv':
+            if experimental_data is not None:
+                # Experimental data
+                experimental_data.to_csv(
+                    safe_long_path(os.path.join(output_settings['output_dir'], f'raw_data_{timestamp}.csv')),
+                    index=False
+                )
+
+            # Concentration profile
+            conc_profile.to_csv(
+                safe_long_path(os.path.join(output_settings['output_dir'], f'concentration_profile_{timestamp}.csv')),
+                index=False
+            )
+            
+            # Flux data
+            flux_data.to_csv(
+                safe_long_path(os.path.join(output_settings['output_dir'], f'flux_data_{timestamp}.csv')),
+                index=False
+            )
+    
+    return model, conc_profile, flux_data, figures
 
 def data_fitting_workflow(
     file_path: str,
@@ -151,8 +181,14 @@ def data_fitting_workflow(
     
     # Call manual_workflow to run the model with the fitted parameters
     _, conc_profile, flux_data, figures = manual_workflow(
-        model=model,
-        processed_exp_data=processed_exp_data,
+        pressure=model.params.base.pressure,
+        temperature=model.params.base.temperature,
+        thickness=model.params.transport.thickness,
+        diameter=model.params.transport.diameter,
+        flowrate=model.params.transport.flowrate,
+        diffusivity=model.results.get('diffusivity', None),
+        equilibrium_concentration=model.results.get('equilibrium_concentration', None),
+        experimental_data=processed_exp_data,
         simulation_params={
             'T': max(processed_exp_data['time']),
             'dt': 5.0,
@@ -186,6 +222,8 @@ def data_fitting_workflow(
         }
     }
 
+    fit_results = model.results
+    
     # Generate plots
     plot_timelag_analysis(
         model, 
@@ -195,20 +233,16 @@ def data_fitting_workflow(
         display=output_settings.get('display_plots', True),
     )
     
-    # Save results
-    if output_dir and output_settings.get('save_data'):
-        data_format = output_settings.get('data_format', 'csv')
-        if data_format == 'csv':
-            processed_exp_data.to_csv(
-                safe_long_path(os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv')),
-                index=False
-            )
-            pd.DataFrame(results_dict['results']).to_csv(
-                safe_long_path(os.path.join(output_dir, 'data', f'processed_data_{timestamp}.csv')),
-                index=False
-            )
-        elif data_format == 'json':
-            with open(os.path.join(output_dir, 'results', f'model_results_{timestamp}.json'), 'w') as f:
-                json.dump(results_dict, f, indent=4)
-
+    # Save fitting results with timestamp
+    if output_settings['save_data'] and output_settings.get('output_dir'):
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        results_path = os.path.join(
+            output_settings['output_dir'], 
+            f'fitting_results_{timestamp}.{output_settings["data_format"]}'
+        )
+        results_path = safe_long_path(results_path)
+        if output_settings['data_format'] == 'csv':
+            pd.DataFrame([{k: v for k, v in fit_results.items()}]
+                        ).to_csv(results_path, index=False)
+            
     return model, results_dict, figures, conc_profile, flux_data, processed_exp_data

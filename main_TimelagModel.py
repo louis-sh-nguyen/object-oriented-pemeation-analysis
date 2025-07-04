@@ -142,12 +142,14 @@ def fit_all_data(n=None):
                 thickness=thickness,
                 diameter=diameter,
                 flowrate=flowrate,
+                stabilisation_threshold=0.001,  # 0.005 for breakthrough curve, 0.002 for whole curve
                 output_settings={
                     'output_dir': file_output_dir,
-                    'display_plots': True,
+                    'display_plots': False,
                     'save_plots': True,
                     'save_data': True,
-                    'plot_format': 'pdf'
+                    'plot_format': 'pdf',
+                    'data_format': 'csv',
                 }
             )
             

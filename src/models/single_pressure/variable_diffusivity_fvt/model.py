@@ -1,8 +1,6 @@
 from typing import Tuple, Optional, Dict, Any, List
 import numpy as np
 import pandas as pd
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 from scipy.optimize import minimize
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
