@@ -6,6 +6,7 @@ from ....utils.plotting import set_style
 
 def plot_timelag_analysis(model, data: pd.DataFrame, 
                          ax: Optional[plt.Axes] = None,
+                         fig: Optional[plt.Figure] = None,
                          save_path: Optional[str] = None,
                          display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -36,7 +37,7 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -65,13 +66,14 @@ def plot_timelag_analysis(model, data: pd.DataFrame,
     if display:
         plt.tight_layout()
         plt.show()
-    else:
-        plt.close(fig)
+    # else:
+    #     plt.close(fig)
     
     return fig, ax
 
 def plot_concentration_profile(conc_profile: pd.DataFrame,
                              ax: Optional[plt.Axes] = None,
+                             fig: Optional[plt.Figure] = None,
                              save_path: Optional[str] = None,
                              display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -90,7 +92,7 @@ def plot_concentration_profile(conc_profile: pd.DataFrame,
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -114,14 +116,15 @@ def plot_concentration_profile(conc_profile: pd.DataFrame,
     if display:
         plt.tight_layout()
         plt.show()
-    else:
-        plt.close(fig)
+    # else:
+    #     plt.close(fig)
     
     return fig, ax
 
 def plot_flux_over_time(flux_data: pd.DataFrame,
                        experimental_data: Optional[pd.DataFrame] = None,
                        ax: Optional[plt.Axes] = None,
+                       fig: Optional[plt.Figure] = None,
                        save_path: Optional[str] = None,
                        display: bool = True) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -142,7 +145,7 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
-    else:
+    elif fig is None:
         fig = ax.figure
     set_style()
     
@@ -167,7 +170,7 @@ def plot_flux_over_time(flux_data: pd.DataFrame,
     if display:
         plt.tight_layout()
         plt.show()
-    else:
-        plt.close(fig)
+    # else:
+    #     plt.close(fig)
     
     return fig, ax

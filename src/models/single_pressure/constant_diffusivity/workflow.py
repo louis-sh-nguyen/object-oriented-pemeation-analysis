@@ -1,16 +1,101 @@
 import os
 import json
+from matplotlib import pyplot as plt
 import pandas as pd
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
+import time
 
 from ....utils.data_processing import preprocess_data
+from ....utils.dir_paths import safe_long_path
 from .model import TimelagModel
 from .plotting import (
     plot_timelag_analysis,
     plot_concentration_profile,
     plot_flux_over_time
 )
+
+def manual_workflow(
+    pressure: float,
+    temperature: float,
+    thickness: float,
+    diameter: float,
+    flowrate: float,
+    diffusivity: float,
+    equilibrium_concentration: float,
+    experimental_data: Optional[pd.DataFrame] = None,
+    simulation_params: Dict = {
+        'T': 10e3,  # total time [s]
+        'dx': 0.002,   # spatial step [adim]
+        'X': 1.0,      # normalized position
+        'rel_tol': 1e-8,  # relative tolerance
+        'atol': 1e-9    # absolute tolerance
+    },
+    output_settings: Dict[str, Any] = {
+        'output_dir': None,
+        'display_plots': True,
+        'save_plots': True,
+        'save_data': True,
+        'plot_format': 'png',
+        'data_format': 'csv'
+    }
+) -> Tuple[TimelagModel, pd.DataFrame, pd.DataFrame, Dict[str, plt.Figure]]:
+    
+    # Always create timestamp
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    # Setup output directories
+    if output_settings.get('output_dir'):
+        os.makedirs(output_settings['output_dir'], exist_ok=True)
+    
+    time.sleep(0.5)  # Small delay for better timing in outputs
+    
+    # Initialize model
+    model = TimelagModel.from_parameters(
+        pressure=pressure,
+        temperature=temperature,
+        thickness=thickness,
+        diameter=diameter,
+        flowrate=flowrate,
+        diffusivity=diffusivity,
+        equilibrium_concentration=equilibrium_concentration,
+    )
+    
+    # Solve diffusion PDE using solve_ivp method (more robust than finite difference)
+    # dt and dx parameters are converted to appropriate grid sizing for solve_ivp
+    conc_profile, flux_data = model.solve_pde(
+        D=diffusivity,
+        C_eq=equilibrium_concentration,
+        L=thickness,
+        T=simulation_params['T'],
+        dt=simulation_params['dt'],  # Larger time step is okay with solve_ivp's adaptive timestepping
+        dx=simulation_params['dx']  # Use relative spatial resolution
+    )
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), constrained_layout=True)    # 2x1 plot
+
+    plot_concentration_profile(
+        conc_profile,
+        ax=ax1,
+        display=False,
+    )
+    
+    plot_flux_over_time(
+        flux_data,
+        experimental_data=experimental_data,
+        ax=ax2,
+        display=False
+    )
+    
+    # Save outputs with timestamps
+    if output_settings['save_plots'] and output_settings.get('output_dir'):
+        plot_path = os.path.join(
+            output_settings['output_dir'], 
+            f'constant_diffusivity_analysis_summary_{timestamp}.{output_settings["plot_format"]}'
+        )
+        plot_path = safe_long_path(plot_path)
+        fig.savefig(plot_path, dpi=300, bbox_inches='tight')
 
 def data_fitting_workflow(
     file_path: str,
@@ -39,7 +124,6 @@ def data_fitting_workflow(
     else:
         timestamp = None
 
-    
     # Create model and fit
     model = TimelagModel.from_parameters(
         pressure=pressure,
@@ -53,7 +137,6 @@ def data_fitting_workflow(
     exp_data = pd.read_excel(file_path)
     
     # Process data
-        # Preprocess data and calculate tau using provided stabilisation_threshold
     processed_exp_data = preprocess_data(
         exp_data,
         thickness=model.params.transport.thickness,
@@ -66,6 +149,17 @@ def data_fitting_workflow(
     
     model.fit_to_data(processed_exp_data)
     
+    # Call manual_workflow to run the model with the fitted parameters
+    model, conc_profile, flux_data, figures = manual_workflow(
+        model=model,
+        processed_exp_data=processed_exp_data,
+        simulation_params={
+            'T': max(processed_exp_data['time']),
+            'dt': 5.0,
+            'dx': thickness / 100,
+        },
+        output_settings=output_settings
+    )
     # Generate results dictionary
     results_dict = {
         'parameters': {
@@ -91,61 +185,30 @@ def data_fitting_workflow(
             'solubility': 'cm³(STP) cm⁻³ bar⁻¹'
         }
     }
-    
-    # Handle plotting and saving
-    if output_dir and output_settings.get('save_plots'):
-        plot_path = lambda name: os.path.join(
-            output_dir, 'plots', f'{name}_{timestamp}.{output_settings["plot_format"]}'
-        )
-    else:
-        plot_path = lambda name: None
 
     # Generate plots
     plot_timelag_analysis(
         model, 
         processed_exp_data,
-        save_path=plot_path('timelag_analysis'),
-        display=output_settings.get('display_plots', True)
+        save_path=safe_long_path(os.path.join(
+            output_dir, f'timelag_analysis_{timestamp}.{output_settings["plot_format"]}')),
+        display=output_settings.get('display_plots', True),
     )
     
-    if model.results.get('diffusivity') and model.results.get('equilibrium_concentration'):
-        # Solve diffusion PDE using solve_ivp method (more robust than finite difference)
-        # dt and dx parameters are converted to appropriate grid sizing for solve_ivp
-        conc_profile, flux_data = model.solve_pde(
-            D=model.results['diffusivity'],
-            C_eq=model.results['equilibrium_concentration'],
-            L=model.params.transport.thickness,
-            T=max(processed_exp_data['time']),
-            dt=5.0,  # Larger time step is okay with solve_ivp's adaptive timestepping
-            dx=model.params.transport.thickness/100  # Use relative spatial resolution
-        )
-        
-        plot_concentration_profile(
-            conc_profile,
-            save_path=plot_path('concentration_profile'),
-            display=output_settings.get('display_plots', True)
-        )
-        
-        plot_flux_over_time(
-            flux_data,
-            experimental_data=processed_exp_data,
-            save_path=plot_path('flux_evolution'),
-            display=output_settings.get('display_plots', True)
-        )
-
     # Save results
     if output_dir and output_settings.get('save_data'):
         data_format = output_settings.get('data_format', 'csv')
         if data_format == 'csv':
             processed_exp_data.to_csv(
-                os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv'),
+                safe_long_path(os.path.join(output_dir, 'data', f'raw_data_{timestamp}.csv')),
                 index=False
             )
             pd.DataFrame(results_dict['results']).to_csv(
-                os.path.join(output_dir, 'data', f'processed_data_{timestamp}.csv')
+                safe_long_path(os.path.join(output_dir, 'data', f'processed_data_{timestamp}.csv')),
+                index=False
             )
         elif data_format == 'json':
             with open(os.path.join(output_dir, 'results', f'model_results_{timestamp}.json'), 'w') as f:
                 json.dump(results_dict, f, indent=4)
 
-    return results_dict
+    return model, results_dict, figures, conc_profile, flux_data, processed_exp_data
