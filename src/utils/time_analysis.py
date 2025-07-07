@@ -95,9 +95,22 @@ def identify_start_time(
         .rolling(window=window)
         .median()
     )
-    stabilisation_index = df[(df["pct_change_mean"] <= threshold)].index[0]
-    stabilisation_time = df.loc[stabilisation_index, "time"]
-    return stabilisation_time
+    
+    # Use final 1000 rows for stabilisation analysis
+    stable_df = df[(df["pct_change_mean"] <= threshold)]
+    
+    if stable_df.empty:
+        print(f"No stabilisation found within threshold {threshold}. Using last time point.")
+        return float(df.iloc[-1]["time"])
+    
+    elif len(stable_df) < 100:
+        print(f"Warning: Less than 100 stable points found. Using last time point.")
+        return float(df.iloc[-1]["time"])
+    
+    else:
+        stabilisation_index = stable_df.index[-100]
+        stabilisation_time = stable_df.loc[stabilisation_index, "time"]
+        return stabilisation_time
 
 def find_time_lag(
     data: pd.DataFrame,

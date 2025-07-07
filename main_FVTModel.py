@@ -383,6 +383,7 @@ if __name__ == '__main__':
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     print(f"Working directory set to: {os.getcwd()}")
+    
     # test_model_creation()
     # test_pde_solving()
     # test_manual_workflow()
@@ -390,4 +391,4 @@ if __name__ == '__main__':
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
     # Change the working directory to the script's location
-    fit_all_data(n=1)
+    fit_all_data()
