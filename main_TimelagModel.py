@@ -6,6 +6,7 @@ from src.models.single_pressure.constant_diffusivity import (
     TimelagModelParameters,
     TimelagTransportParams,
     data_fitting_workflow,
+    manual_workflow
 )
 from src.models.base_parameters import BaseParameters
 from src.utils.dir_paths import safe_long_path
@@ -73,6 +74,41 @@ def test_data_fitting():
     print("\nFitted Parameters:")
     for param, value in model.results.items():
         print(f"{param}: {value:.4e}")
+
+def test_manual_workflow():
+    """Test the FVT workflow"""
+    
+    # Run workflow
+    model, conc_profile, flux_data, figures = manual_workflow(
+        pressure=50.0,
+        temperature=25.0,
+        thickness=0.1,
+        diameter=1.0,
+        flowrate=8.0,
+        diffusivity=7.00e-09,
+        equilibrium_concentration=50,
+        simulation_params={
+            'dt': 5.0,  # [s]
+            'T': 700e3,  # total time [s]
+            'dx': 0.001,   # spatial step [adim]
+            'X': 1.0,      # normalized position
+        },
+        output_settings={
+            'output_dir': 'outputs/manual_workflow',
+            'display_plots': True,
+            'save_plots': False,
+            'save_data': True,
+            'plot_format': 'png',
+            'data_format': 'csv'
+        }
+    )
+    
+    # Print some results
+    print("\nWorkflow Results:")
+    print(f"Time points: {len(flux_data)}")
+    print(f"Spatial points: {len(conc_profile.columns)}")
+    print(f"Max flux: {flux_data['flux'].max():.4e}")
+    print(f"Min flux: {flux_data['flux'].min():.4e}")
 
 def test_full_workflow():
     """Test complete analysis workflow"""
@@ -195,5 +231,6 @@ if __name__ == '__main__':
     
     # test_model_creation()
     # test_data_fitting()
+    # test_manual_workflow()
     # test_full_workflow()
     fit_all_data(n=1)  # Adjust n to limit number of files processed
