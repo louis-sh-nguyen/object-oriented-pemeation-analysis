@@ -126,19 +126,18 @@ def test_manual_workflow():
         thickness=0.1,
         diameter=1.0,
         flowrate=8.0,
-        D1_prime=4.00,
-        DT_0=8.38e-7,
+        D1_prime=2.22,
+        DT_0=2.05e-7,
         simulation_params={
-            'T': 10e3,  # total time [s]
+            'T': 60e3,  # total time [s]
             'dx': 0.005,   # spatial step [adim]
             'X': 1.0,      # normalized position
-            'use_full_jacobian': True
         },
         output_settings={
             'output_dir': 'outputs/manual_workflow',
-            'display_plots': True,
+            'display_plots': False,
             'save_plots': False,
-            'save_data': False,
+            'save_data': True,
             'plot_format': 'png',
             'data_format': 'csv'
         }
