@@ -207,7 +207,7 @@ def manual_workflow(
                 f'diffusivity_profile_{timestamp}.csv'
             )
             datapath = safe_long_path(datapath)
-            Dprime_df.to_csv(datapath)
+            Dprime_df.to_csv(datapath, index=False)
             
             # Export flux evolution
             flux_path = os.path.join(
@@ -215,7 +215,7 @@ def manual_workflow(
                 f'flux_evolution_{timestamp}.csv'
             )
             flux_path = safe_long_path(flux_path)
-            flux_df.to_csv(flux_path)
+            flux_df.to_csv(flux_path, index=False)
         elif output_settings['data_format'] == 'excel':
             datapath = os.path.join(
                 output_settings['output_dir'], 
@@ -374,7 +374,7 @@ def data_fitting_workflow(
         simulation_params={
             'T': processed_exp_data['time'].max(),
             'X': 1.0,
-            'dx': 0.005,
+            'dx': 0.001,
             'rel_tol': 1e-8,  # Higher accuracy for final results
             'atol': 1e-9,
             'dt': 0.001  # Initial time step for solver
