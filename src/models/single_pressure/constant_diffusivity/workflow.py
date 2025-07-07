@@ -227,7 +227,7 @@ def data_fitting_workflow(
     # Link model results to results_dict (same object im memory)
     fit_results = model.results
 
-    # Calculate RMSE if flux is available
+    # Calculate RMSE and R² if flux is available
     if 'flux' in processed_exp_data.columns:
         model_flux = np.interp(
             processed_exp_data['time'],
@@ -235,7 +235,14 @@ def data_fitting_workflow(
             flux_data['flux']
         )
         rmse = np.sqrt(np.mean((processed_exp_data['flux'] - model_flux) ** 2))
+        
+        # Calculate R² (coefficient of determination)
+        ss_res = np.sum((processed_exp_data['flux'] - model_flux) ** 2)
+        ss_tot = np.sum((processed_exp_data['flux'] - np.mean(processed_exp_data['flux'])) ** 2)
+        r2 = 1 - (ss_res / ss_tot)
+        
         fit_results['rmse'] = rmse
+        fit_results['r2'] = r2
     
     # Generate plots
     plot_timelag_analysis(

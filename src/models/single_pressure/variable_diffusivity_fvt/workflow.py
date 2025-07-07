@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
+import numpy as np
 from ....utils.data_processing import preprocess_data
 from ..variable_diffusivity_fvt import FVTModel
 import time
@@ -347,6 +348,7 @@ def data_fitting_workflow(
         track_fitting_progress=True
     )
     time.sleep(0.5)
+    
     print("Fitting completed. Fitting Results:")
     for key, value in fit_results.items():
         if key not in ['optimisation_result', 'optimisation_history']:
@@ -382,6 +384,22 @@ def data_fitting_workflow(
         output_settings=output_settings
     )
     
+    # Calculate R² if flux data is available
+    if 'normalised_flux' in processed_exp_data.columns and 'normalised_flux' in flux_df.columns:
+        # Interpolate model flux to experimental time points
+        model_flux = np.interp(
+            processed_exp_data['time'],
+            flux_df['time'],
+            flux_df['normalised_flux']
+        )
+        
+        # Calculate R² (coefficient of determination)
+        ss_res = np.sum((processed_exp_data['normalised_flux'] - model_flux) ** 2)
+        ss_tot = np.sum((processed_exp_data['normalised_flux'] - np.mean(processed_exp_data['normalised_flux'])) ** 2)
+        r2 = 1 - (ss_res / ss_tot)
+        
+        fit_results['r2'] = r2
+    
     # Save fitting results with timestamp
     if output_settings['save_data'] and output_settings.get('output_dir'):
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -401,6 +419,7 @@ def data_fitting_workflow(
                 f.write(f"D1_prime: {D1_prime:.4e}\n")
                 f.write(f"DT_0: {DT_0:.4e}\n")
                 f.write(f"RMSE: {fit_results['rmse']:.4e}\n")
+                f.write(f"R²: {fit_results['r2']:.4f}\n")  # R² value
                 if 'n_successful' in fit_results:
                     f.write(f"Successful optimizations: {fit_results['n_successful']}\n")
     
