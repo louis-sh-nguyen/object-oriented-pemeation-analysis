@@ -354,7 +354,8 @@ def fit_all_data(n=None):
                 'pressure': pressure,
                 'D1_prime': fit_results['D1_prime'],
                 'DT_0': fit_results['DT_0'],
-                'rmse': fit_results['rmse']
+                'rmse': fit_results['rmse'],
+                'r2': fit_results['r2'],
             }
             
             print(f"Successfully fitted {file}")
@@ -362,6 +363,7 @@ def fit_all_data(n=None):
             print(f"D1_prime: {fit_results['D1_prime']:.4e}")
             print(f"DT_0: {fit_results['DT_0']:.4e}")
             print(f"RMSE: {fit_results['rmse']:.4e}")
+            print(f"R²: {fit_results['r2']:.4f}")
             
         except Exception as e:
             print(f"Error processing {file}: {str(e)}")
