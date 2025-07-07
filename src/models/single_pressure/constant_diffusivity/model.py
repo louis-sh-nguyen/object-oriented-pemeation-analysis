@@ -58,7 +58,7 @@ class TimelagModel(PermeationModel):
             return self.params.transport.diffusivity
         
         # Start of linear region of cumulative flux
-        stab_start_time = identify_start_time(data, column='cumulative_flux')
+        stab_start_time = identify_start_time(data, column='cumulative_flux', threshold=0.01)
         time_lag, stats = find_time_lag(data, stab_start_time)
         
         D = self.params.transport.thickness**2 / (6 * time_lag)

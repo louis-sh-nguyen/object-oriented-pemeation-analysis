@@ -234,4 +234,4 @@ if __name__ == '__main__':
     # test_data_fitting()
     # test_manual_workflow()
     # test_full_workflow()
-    fit_all_data(n=1)  # Adjust n to limit number of files processed
+    fit_all_data()
