@@ -222,6 +222,6 @@ def preprocess_data(data: pd.DataFrame,
         df.attrs['stabilisation_time'] = stab_time
     
     # Columns to retain
-    columns_to_keep = ['time', 'flux', 'cumulative_flux', 'normalised_flux', 'yCO2_bl']
+    columns_to_keep = ['time', 'flux', 'cumulative_flux', 'normalised_flux', 'yCO2_bl', 'pressure']
     
     return df[columns_to_keep]
