@@ -207,6 +207,9 @@ def preprocess_data(data: pd.DataFrame,
     # Normalise flux by dividing by the maximum rolling average
     df['normalised_flux'] = df['flux'] / rolling_avg_max
     
+    # Convert barg to bar for pressure
+    df['pressure'] = df['pressure'] + 1  # Convert from barg to bar
+    
     # Add metadata
     df.attrs['thickness'] = thickness
     df.attrs['diameter'] = diameter
