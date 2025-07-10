@@ -383,6 +383,7 @@ def fit_all_data(n=None):
     print(f"\nCompleted processing all files. Results saved to {output_base_dir}")
 
 if __name__ == '__main__':
+    # Change the working directory to the script's location
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     print(f"Working directory set to: {os.getcwd()}")
@@ -393,5 +394,4 @@ if __name__ == '__main__':
     # test_parameter_sensitivity()
     # test_data_fitting_workflow_D1prime()
     # test_data_fitting_workflow_D1prime_DT0()
-    # Change the working directory to the script's location
     fit_all_data()
