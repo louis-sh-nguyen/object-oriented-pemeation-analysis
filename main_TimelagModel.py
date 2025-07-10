@@ -192,16 +192,16 @@ def fit_all_data(n=None):
             # Store results
             all_results[file] = {
                 'file_name': file,
-                'temperature': model_with_results.params.base.temperature,
-                'pressure': model_with_results.params.base.pressure,
-                'thickness': model_with_results.params.transport.thickness,
-                'diameter': model_with_results.params.transport.diameter,
-                'flowrate': model_with_results.params.transport.flowrate,
-                'timelag': model_with_results.results.get('time_lag', None),
-                'diffusivity': model_with_results.results.get('diffusivity', None),
-                'permeability': model_with_results.results.get('permeability', None),                
-                'equilibrium_concentration': model_with_results.results.get('equilibrium_concentration', None),
-                'rmse': model_with_results.results.get('rmse', None),
+                'temperature / C': model_with_results.params.base.temperature,
+                'pressure / bar': model_with_results.params.base.pressure,
+                'thickness / cm': model_with_results.params.transport.thickness,
+                'diameter / cm': model_with_results.params.transport.diameter,
+                'flowrate / cm³(STP) s⁻¹': model_with_results.params.transport.flowrate,
+                'timelag / s': model_with_results.results.get('time_lag', None),
+                'diffusivity / cm² s⁻¹': model_with_results.results.get('diffusivity', None),
+                'permeability / cm³(STP) bar⁻¹ cm⁻¹ s⁻¹': model_with_results.results.get('permeability', None),                
+                'equilibrium_concentration / cm³(STP) cm⁻³': model_with_results.results.get('equilibrium_concentration', None),
+                'rmse / mol/m³': model_with_results.results.get('rmse', None),
                 'r2': model_with_results.results.get('r2', None),
             }
             

@@ -335,7 +335,7 @@ def fit_all_data(n=None):
                     'mode': 'both',
                     'initial_guess': (2.0, 1.0e-7), #*modify
                     'bounds': ((1.001, 20), (1.0e-11, 1.0e-6)),  #* modify
-                    'n_starts': 10,  #* modify
+                    'n_starts': 20,  #* modify
                 },
                 output_settings={
                     'output_dir': file_output_dir,
@@ -350,10 +350,13 @@ def fit_all_data(n=None):
             # Store essential results plus file name and conditions
             all_results[file] = {
                 'file_name': file,
-                'temperature': temperature,
-                'pressure': pressure,
+                'temperature / C': temperature,
+                'pressure / bar': pressure,
+                'thickness / cm': thickness,
+                'diameter / cm': diameter,
+                'flowrate / cm³(STP) s⁻¹': flowrate,
                 'D1_prime': fit_results['D1_prime'],
-                'DT_0': fit_results['DT_0'],
+                'DT_0 / cm² s⁻¹': fit_results['DT_0'],
                 'rmse': fit_results['rmse'],
                 'r2': fit_results['r2'],
             }
