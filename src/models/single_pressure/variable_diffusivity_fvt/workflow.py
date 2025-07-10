@@ -376,7 +376,7 @@ def data_fitting_workflow(
         simulation_params={
             'T': processed_exp_data['time'].max(),
             'X': 1.0,
-            'dx': 0.001,
+            'dx': 0.005,
             'rel_tol': 1e-8,  # Higher accuracy for final results
             'atol': 1e-9,
             'dt': 0.001  # Initial time step for solver

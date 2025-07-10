@@ -193,7 +193,7 @@ def data_fitting_workflow(
         simulation_params={
             'T': max(processed_exp_data['time']),
             'dt': 5.0,
-            'dx': thickness / 1000,
+            'dx': thickness / 200,
         },
         output_settings=output_settings
     )
