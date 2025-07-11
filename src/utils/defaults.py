@@ -54,25 +54,25 @@ THICKNESS_DICT = {
 
 # Sample-specific flowrate mappings
 FLOWRATE_DICT = {
-    'RUN_H_25C-50bar': 8.0, 
-    'RUN_H_25C-100bar_7': 8.0, 
-    'RUN_H_25C-100bar_8': 8.0, 
-    'RUN_H_25C-100bar_9': 8.0, 
-    'RUN_H_25C-200bar_2': 8.0,
-    'RUN_H_50C-50bar': 8.0, 
-    'RUN_H_50C-100bar_2': 8.0, 
-    'RUN_H_50C-200bar': 8.0, 
-    'RUN_H_75C-50bar': 8.0, 
-    'RUN_H_75C-100bar': 8.0,
-    'S3R1': 4.17, 
-    'S3R2': 4.046, 
-    'S3R3': 4.027, 
-    'S3R4': 4.0454, 
-    'S4R3': 9.83, 
-    'S4R4': 9.84, 
-    'S4R5': 9.92, 
-    'S4R6': 10,
-}  # [ml min^-1]
+    'RUN_H_25C-50bar': 8.0/60, 
+    'RUN_H_25C-100bar_7': 8.0/60, 
+    'RUN_H_25C-100bar_8': 8.0/60, 
+    'RUN_H_25C-100bar_9': 8.0/60, 
+    'RUN_H_25C-200bar_2': 8.0/60,
+    'RUN_H_50C-50bar': 8.0/60, 
+    'RUN_H_50C-100bar_2': 8.0/60, 
+    'RUN_H_50C-200bar': 8.0/60, 
+    'RUN_H_75C-50bar': 8.0/60, 
+    'RUN_H_75C-100bar': 8.0/60,
+    'S3R1': 4.17/60, 
+    'S3R2': 4.046/60, 
+    'S3R3': 4.027/60, 
+    'S3R4': 4.0454/60, 
+    'S4R3': 9.83/60, 
+    'S4R4': 9.84/60, 
+    'S4R5': 9.92/60, 
+    'S4R6': 10/60,
+}  # [ml s^-1]
 
 # Temperature mapping for samples
 TEMPERATURE_DICT = {
