@@ -196,12 +196,12 @@ def fit_all_data(n=None):
                 'pressure / bar': model_with_results.params.base.pressure,
                 'thickness / cm': model_with_results.params.transport.thickness,
                 'diameter / cm': model_with_results.params.transport.diameter,
-                'flowrate / cm³(STP) s⁻¹': model_with_results.params.transport.flowrate,
+                'flowrate / cm^3(STP) s^-1': model_with_results.params.transport.flowrate,
                 'timelag / s': model_with_results.results.get('time_lag', None),
-                'diffusivity / cm² s⁻¹': model_with_results.results.get('diffusivity', None),
-                'permeability / cm³(STP) bar⁻¹ cm⁻¹ s⁻¹': model_with_results.results.get('permeability', None),                
-                'equilibrium_concentration / cm³(STP) cm⁻³': model_with_results.results.get('equilibrium_concentration', None),
-                'rmse / mol/m³': model_with_results.results.get('rmse', None),
+                'diffusivity / cm^2 s^-1': model_with_results.results.get('diffusivity', None),
+                'permeability / cm^3(STP) bar^-1 cm^-1 s^-1': model_with_results.results.get('permeability', None),
+                'equilibrium_concentration / cm^3(STP) cm^-3': model_with_results.results.get('equilibrium_concentration', None),
+                'rmse / cm^3(STP) cm^-2 s^-1': model_with_results.results.get('rmse', None),
                 'r2': model_with_results.results.get('r2', None),
             }
             

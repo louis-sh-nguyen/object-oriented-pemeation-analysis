@@ -354,10 +354,10 @@ def fit_all_data(n=None):
                 'pressure / bar': pressure,
                 'thickness / cm': thickness,
                 'diameter / cm': diameter,
-                'flowrate / cm³(STP) s⁻¹': flowrate,
+                'flowrate / cm^3(STP) s^-1': flowrate,
                 'D1_prime': fit_results['D1_prime'],
-                'DT_0 / cm² s⁻¹': fit_results['DT_0'],
-                'rmse': fit_results['rmse'],
+                'DT_0 / cm^2 s^-1': fit_results['DT_0'],
+                'rmse / cm^3(STP) cm^-2 s^-1': fit_results['rmse'],
                 'r2': fit_results['r2'],
             }
             
